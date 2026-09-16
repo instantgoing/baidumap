@@ -88,6 +88,24 @@ function planningCategories(missingCategories = []) {
   return [...new Set(missingCategories)].filter((category) => REQUIRED_CATEGORIES.includes(category))
 }
 
+function buildReportNarrative({ score, band, categories, planning, source, confidence, durationMinutes }) {
+  const weakCategories = categories
+    .filter((category) => category.state === 'critical' || category.state === 'missing')
+    .slice(0, 3)
+    .map((category) => category.label)
+  const topCandidate = planning?.candidates?.[0]
+  return {
+    headline: `${durationMinutes} 分钟生活圈当前综合分 ${score} 分，${band.label}。`,
+    finding: weakCategories.length
+      ? `当前主要短板集中在${weakCategories.join('、')}，应先核对这些类别的覆盖和数据完整性。`
+      : '当前八类设施均有记录，仍应结合覆盖率和空间均衡指标判断服务质量。',
+    action: topCandidate
+      ? `下一步建议优先复核 ${topCandidate.zoneId}，关注${topCandidate.recommendedCategories.map((category) => REPORT_CATEGORY_LABELS[category] || category).join('、') || '必测设施'}。`
+      : '当前没有可排序的灰区候选，建议保留本次分析作为后续对照基线。',
+    evidence: `结论基于${source || '当前数据源'}与${confidence || '未确认'}边界置信度生成；规划部分是确定性情景估算，不是正式选址结论。`,
+  }
+}
+
 export function buildPlanningModel({
   blind,
   center,
@@ -214,6 +232,15 @@ export function buildReportModel({
     return { id: category, label: REPORT_CATEGORY_LABELS[category], count, coverage, state }
   })
   const planning = buildPlanningModel({ blind, center, baselineScore: score, baselineDimensions: dimensions, config })
+  const narrative = buildReportNarrative({
+    score,
+    band,
+    categories,
+    planning,
+    source: meta?.source || 'unknown',
+    confidence: isochrone?.confidence?.level || 'unavailable',
+    durationMinutes,
+  })
   const planningByZoneId = new Map((planning?.candidates || []).map((candidate) => [candidate.zoneId, candidate]))
   const candidateSites = (blind.zones || []).map((zone, index) => ({
     id: `candidate-${zone.id || index + 1}`,
@@ -243,6 +270,7 @@ export function buildReportModel({
     band,
     dimensions,
     categories,
+    narrative,
     candidateSites,
     zones: blind.zones || [],
     planning,
@@ -278,12 +306,14 @@ export function buildReportHtml(report) {
     ? report.planning.candidates.map((candidate) => `<tr><td>${escapeHtml(candidate.zoneId)}</td><td>${candidate.priorityScore}</td><td>${escapeHtml((candidate.recommendedCategories || []).map((category) => REPORT_CATEGORY_LABELS[category] || category).join('、') || '—')}</td><td>${Math.round(Number(candidate.estimatedImpact?.blindCellReduction || 0))}</td></tr>`).join('')
     : '<tr><td colspan="4">当前没有规划候选。</td></tr>'
   const planningSection = report.planning ? `<h2>规划优先级与情景估算</h2><p>${escapeHtml(report.planning.summary)}</p><p class="formula">规划前综合分 ${report.planning.baseline.score} · 情景后综合分 ${report.planning.scenarioAfter.score} · 情景变化 ${report.planning.scenarioAfter.scoreDelta >= 0 ? '+' : ''}${report.planning.scenarioAfter.scoreDelta}</p><table><thead><tr><th>灰区</th><th>优先级</th><th>建议类别</th><th>情景减少盲区网格</th></tr></thead><tbody>${planningRows}</tbody></table><ul>${(report.planning.assumptions || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''
+  const narrativeSection = report.narrative ? `<h2>结论摘要</h2><p><strong>${escapeHtml(report.narrative.headline)}</strong></p><p>${escapeHtml(report.narrative.finding)}</p><p>${escapeHtml(report.narrative.action)}</p><p class="muted">${escapeHtml(report.narrative.evidence)}</p>` : ''
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>邻里半径体检报告</title>
 <style>body{margin:0;color:#1f3034;font:14px/1.65 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:#edf3f1}main{max-width:900px;margin:28px auto;padding:42px;background:#fff}header{display:flex;justify-content:space-between;gap:30px;border-bottom:3px solid #167f76;padding-bottom:24px}.score{font-size:52px;font-weight:800;color:#167f76;line-height:1}.muted{color:#71817f}h1{margin:0 0 8px;font-size:28px}h2{margin-top:30px;font-size:18px}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #dde6e3;text-align:left}th{background:#f2f7f5}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 24px;margin-top:22px}.formula{padding:14px;background:#edf7f4;border-left:4px solid #167f76}@media print{body{background:#fff}main{margin:0;max-width:none;padding:18mm;box-shadow:none}@page{size:A4;margin:0}}</style></head>
 <body><main><header><div><div class="muted">${escapeHtml(report.durationMinutes)} 分钟生活圈 · 民生设施体检</div><h1>${escapeHtml(report.address || '自定义中心点')}</h1><div>${escapeHtml(report.band.label)}</div></div><div><div class="score">${report.score}</div><div class="muted">综合分 / 100</div></div></header>
 <section class="meta"><div><b>中心点：</b>${escapeHtml(`${report.center?.lng ?? '—'}, ${report.center?.lat ?? '—'} BD-09`)}</div><div><b>数据时间：</b>${escapeHtml(report.dataTimestampLabel)}</div><div><b>算法版本：</b>${escapeHtml(report.algorithmVersion)}</div><div><b>报告版本：</b>${escapeHtml(report.reportVersion)}</div><div><b>数据来源：</b>${escapeHtml(report.source)}</div><div><b>边界置信度：</b>${escapeHtml(report.confidence)}</div><div><b>边界复核：</b>${escapeHtml(`${report.boundaryVerification.withinToleranceCount}/${report.boundaryVerification.requestedDirections} 点达标`)}</div></section>
 <h2>评分依据</h2><p class="formula">${escapeHtml(report.formula)}</p>
+${narrativeSection}
 <h2>分类设施覆盖</h2><table><thead><tr><th>设施类别</th><th>生活圈内数量</th><th>1 公里网格覆盖</th></tr></thead><tbody>${categoryRows}</tbody></table>
 <h2>灰区清单</h2><table><thead><tr><th>灰区</th><th>缺失类别</th><th>面积</th><th>人口代理</th></tr></thead><tbody>${zoneRows}</tbody></table>
 ${planningSection}
