@@ -24,8 +24,8 @@
 | `npm run lint` | 临时干净独立副本 | 通过 |
 | `npm test` | 临时干净独立副本 | 通过；36 / 36 |
 | `npm run test:e2e` | 临时干净独立副本 | 通过；桌面 Chromium + Pixel 5，2 / 2 |
-| `npm run build` | 临时干净独立副本 | 通过；Vite 8.2.2，JS 326.29 kB（gzip 103.26 kB） |
-| `npm run demo` 烟雾检查 | 临时干净独立副本，端口 4188 | 通过；HTTP 200、Vite root 正常；测试进程随后终止 |
+| `npm run build` | 临时干净独立副本 | 通过；Vite 8.2.2，JS 327.80 kB（gzip 103.77 kB），CSS 43.04 kB（gzip 10.01 kB） |
+| `npm run demo` 烟雾检查 | 临时干净独立副本，端口 4173 | 通过；固定样例服务成功启动，随后测试进程终止 |
 | `python -m compileall -q app` | 干净副本源码、当前 Python 3.13 | 通过 |
 | 后端 `unittest discover` | 干净副本源码、当前 Python 3.13 | 通过；43 / 43 |
 | `docker compose config --quiet` | 临时干净独立副本 | 通过 |
