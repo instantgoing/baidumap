@@ -74,6 +74,7 @@
 - 全新临时 Python venv：已安装 `backend/requirements.txt`，随后编译和 43 / 43 后端测试通过。
 - `npm run check:submission`：通过。
 - `npm run evidence:validate-template`：通过。
+- `npm run demo`：成功启动固定样例服务，确认无 AK、无后端模式；随后已停止演示进程。
 
 独立副本已形成本地提交（`chore: prepare competition release`，提交哈希以独立仓库 `git log -1` 为准），当前没有远程仓库或远程提交。
 
