@@ -22,9 +22,9 @@
 | `npm run evidence:validate-template` | 临时干净独立副本 | 通过；30 条 POI 槽位，三类各 10 条；另有 12 条边界和 12 条灰区槽位 |
 | `npm run check:submission` | 临时干净独立副本 + 当前工作区复核 | 通过；当前为 27 份自动检查交付物，固定样例与基准结构通过 |
 | `npm run lint` | 临时干净独立副本 | 通过 |
-| `npm test` | 临时干净独立副本 | 通过；35 / 35 |
+| `npm test` | 临时干净独立副本 | 通过；36 / 36 |
 | `npm run test:e2e` | 临时干净独立副本 | 通过；桌面 Chromium + Pixel 5，2 / 2 |
-| `npm run build` | 临时干净独立副本 | 通过；Vite 8.2.2，JS 320.04 kB（gzip 101.44 kB） |
+| `npm run build` | 临时干净独立副本 | 通过；Vite 8.2.2，JS 326.29 kB（gzip 103.26 kB） |
 | `npm run demo` 烟雾检查 | 临时干净独立副本，端口 4188 | 通过；HTTP 200、Vite root 正常；测试进程随后终止 |
 | `python -m compileall -q app` | 干净副本源码、当前 Python 3.13 | 通过 |
 | 后端 `unittest discover` | 干净副本源码、当前 Python 3.13 | 通过；43 / 43 |
@@ -66,7 +66,7 @@
 - `npm ci`：安装 171 个锁定包，审计 172 个包，0 个已知漏洞。
 - `npm run check:repository -- --require-independent-root`：通过，Git 根目录为独立副本。
 - `npm run lint`：通过。
-- `npm test`：通过，35 / 35。
+- `npm test`：通过，36 / 36。
 - `npm run test:e2e`：通过，桌面 Chromium + 移动视口 2 / 2。
 - `npm run build`：通过，Vite 8.2.2。
 - `python -m compileall -q app`：通过。
@@ -78,3 +78,16 @@
 独立副本已形成本地提交（`chore: prepare competition release`，提交哈希以独立仓库 `git log -1` 为准），当前没有远程仓库或远程提交。
 
 以下事项仍未完成：Docker daemon 未运行，Docker 镜像和 SBOM 未生成；本机未安装 Gitleaks，远程 CI 尚未创建；真实人工核验数据、在线 AK 基准、提交元数据和演示录像仍待外部权限或人工完成。
+
+## 7. P5 情景规划执行记录
+
+本轮已实现并验证 `planning-scenario-v1`：
+
+- P5.1：依据灰区面积、人口代理值和缺失类别生成确定性优先级。
+- P5.2：输出候选设施类别/灰区位置，并估算覆盖网格改善上限。
+- P5.3：输出规划前后覆盖指标和分数情景对比。
+- P5.4：自然语言报告润色尚未实现。
+
+P5 结果明确标记为 `scenario`。估算不包含道路、用地、入口、服务半径和真实步行阻隔，也没有经过独立人工真值复核；因此不能当作正式选址或真实新增设施后的改善率。
+
+P5 变更后的本地验证结果：`npm test` 36/36、`npm run lint`、`npm run build` 和桌面/移动端 E2E 2/2 均通过。

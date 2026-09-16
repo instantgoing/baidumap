@@ -281,6 +281,21 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .limitations { grid-column: 2; padding: 11px 13px; color: #896a39; background: #fff8e9; border: 1px solid #f0dfbb; border-radius: 7px; }
 .limitations strong { font-size: 9px; }
 .limitations ul { margin: 6px 0 0; padding-left: 17px; font-size: 9px; line-height: 1.55; }
+.planning-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-bottom: 14px; }
+.planning-summary > div { padding: 11px 12px; background: #f7faf8; border: 1px solid #e4ece9; border-radius: 7px; }
+.planning-summary span { display: block; color: #8c9a97; font-size: 9px; }
+.planning-summary strong { display: block; margin-top: 4px; color: #2e554f; font: 17px 'DM Mono', monospace; }
+.planning-summary__text { margin: 0 0 13px; color: #637773; font-size: 10px; line-height: 1.6; }
+.planning-candidates { display: grid; gap: 8px; }
+.planning-candidates article { padding: 12px 13px; background: #fbfcfb; border: 1px solid #e3ebe8; border-left: 4px solid #c59144; border-radius: 7px; }
+.planning-candidate__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.planning-candidate__head strong { color: #405451; font-size: 11px; }
+.planning-candidates p, .planning-candidates small { display: block; margin: 4px 0 0; color: #83918e; font-size: 9px; line-height: 1.5; }
+.planning-priority { padding: 3px 6px; border-radius: 5px; font: 9px 'DM Mono', monospace; }
+.planning-priority--high { color: #8a5e21; background: #fff2d8; }
+.planning-priority--medium { color: #56715d; background: #eaf5ec; }
+.planning-priority--low { color: #687573; background: #eef2f1; }
+.planning-assumptions { margin: 13px 0 0; padding: 10px 13px 10px 28px; color: #896a39; background: #fff8e9; border: 1px solid #f0dfbb; border-radius: 7px; font-size: 9px; line-height: 1.6; }
 
 @media (max-width: 1050px) {
   .report-summary, .report-chart-grid { grid-template-columns: 1fr; }
@@ -310,6 +325,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   .report-section__heading { align-items: flex-start; flex-direction: column; gap: 7px; }
   .report-section__heading > p { text-align: left; }
   .report-audit dl { grid-template-columns: repeat(2, 1fr); }
+  .planning-summary { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 520px) {
@@ -323,6 +339,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   .report-zone-list article { grid-template-columns: 25px 1fr; }
   .report-zone-list article > div:last-child { grid-column: 2; text-align: left; }
   .report-audit dl { grid-template-columns: 1fr; }
+  .planning-summary { grid-template-columns: 1fr 1fr; }
 }
 
 @media print {

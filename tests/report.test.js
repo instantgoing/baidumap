@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildReportHtml, buildReportModel } from '../src/report/reportModel.js'
+import { buildPlanningModel, buildReportHtml, buildReportModel } from '../src/report/reportModel.js'
 
 const data = {
   center: { lng: 116.3, lat: 40 },
@@ -34,8 +34,28 @@ test('builds a bounded, auditable stage 4 report model', () => {
   assert.ok(report.score >= 0 && report.score <= 100)
   assert.equal(report.categories.length, 8)
   assert.equal(report.candidateSites.length, 1)
+  assert.equal(report.planning.status, 'scenario')
+  assert.equal(report.planning.candidates[0].zoneId, 'zone-1')
+  assert.ok(report.planning.scenarioAfter.score >= report.planning.baseline.score)
   assert.equal(report.algorithmVersion, 'isochrone-v1')
   assert.match(report.formula, /必测覆盖 30%/)
+})
+
+test('ranks planning candidates and exposes bounded scenario assumptions', () => {
+  const planning = buildPlanningModel({
+    blind: data.blindSpots,
+    center: data.center,
+    baselineScore: 40,
+    baselineDimensions: { categoryCompleteness: 50, facilityCount: 60, dataConfidence: 75 },
+  })
+
+  assert.equal(planning.version, 'planning-scenario-v1')
+  assert.equal(planning.candidates.length, 1)
+  assert.equal(planning.candidates[0].recommendedCategories[0], 'primary_school')
+  assert.match(planning.candidates[0].estimatedImpact.assumption, /不包含道路/)
+  assert.equal(planning.scenarioAfter.blindCellCount, 18)
+  assert.equal(planning.assumptions.length, 3)
+  assert.equal(planning.limitations.length, 1)
 })
 
 test('category cards count only POIs inside the selected service area', () => {
@@ -66,6 +86,7 @@ test('exports a self-contained print report and escapes user text', () => {
 
   assert.match(html, /<!doctype html>/)
   assert.match(html, /报告版本/)
+  assert.match(html, /规划优先级与情景估算/)
   assert.doesNotMatch(html, /<script>alert/)
   assert.match(html, /&lt;script&gt;/)
 })
