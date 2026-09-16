@@ -1,0 +1,13 @@
+sample_id,verification_status,bearing_degrees,boundary_lng,boundary_lat,system_predicted_seconds,independent_seconds,absolute_error_seconds,entry_offset_m,obstruction_notes,source_type,source_title,source_reference,verified_at,verifier,notes
+BD-001,pending,0,,,,,,,,,,,,,待从系统等时圈导出北向边界点后独立计时
+BD-002,pending,30,,,,,,,,,,,,,待从系统等时圈导出30度边界点后独立计时
+BD-003,pending,60,,,,,,,,,,,,,待从系统等时圈导出60度边界点后独立计时
+BD-004,pending,90,,,,,,,,,,,,,待从系统等时圈导出东向边界点后独立计时
+BD-005,pending,120,,,,,,,,,,,,,待从系统等时圈导出120度边界点后独立计时
+BD-006,pending,150,,,,,,,,,,,,,待从系统等时圈导出150度边界点后独立计时
+BD-007,pending,180,,,,,,,,,,,,,待从系统等时圈导出南向边界点后独立计时
+BD-008,pending,210,,,,,,,,,,,,,待从系统等时圈导出210度边界点后独立计时
+BD-009,pending,240,,,,,,,,,,,,,待从系统等时圈导出240度边界点后独立计时
+BD-010,pending,270,,,,,,,,,,,,,待从系统等时圈导出西向边界点后独立计时
+BD-011,pending,300,,,,,,,,,,,,,待从系统等时圈导出300度边界点后独立计时
+BD-012,pending,330,,,,,,,,,,,,,待从系统等时圈导出330度边界点后独立计时

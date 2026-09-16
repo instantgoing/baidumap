@@ -1,0 +1,13 @@
+sample_id,verification_status,stratum,category,lng,lat,system_predicts_gray,ground_truth_is_gray,source_type,source_title,source_reference,verified_at,verifier,notes
+GA-001,pending,interior,market,,,,,,,,,,,待从市场灰区内部抽样并现场确认1公里步行服务可达性
+GA-002,pending,interior,pharmacy,,,,,,,,,,,待从药店灰区内部抽样并现场确认1公里步行服务可达性
+GA-003,pending,interior,primary_school,,,,,,,,,,,待从小学灰区内部抽样并核对独立学校名录与入口
+GA-004,pending,interior,market,,,,,,,,,,,待补第二个市场灰区内部样本
+GA-005,pending,edge,pharmacy,,,,,,,,,,,待在药店灰区边缘内侧抽样
+GA-006,pending,edge,primary_school,,,,,,,,,,,待在小学灰区边缘内侧抽样
+GA-007,pending,edge,market,,,,,,,,,,,待在市场灰区边缘外侧抽样
+GA-008,pending,edge,pharmacy,,,,,,,,,,,待在药店灰区边缘外侧抽样
+GA-009,pending,non_gray,primary_school,,,,,,,,,,,待抽取系统非灰区对照点并核验
+GA-010,pending,non_gray,market,,,,,,,,,,,待抽取系统非灰区对照点并核验
+GA-011,pending,non_gray,pharmacy,,,,,,,,,,,待抽取系统非灰区对照点并核验
+GA-012,pending,non_gray,primary_school,,,,,,,,,,,待抽取系统非灰区对照点并核验

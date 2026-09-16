@@ -1,0 +1,11 @@
+review_id,verification_status,system_uid,system_name,system_category,system_address,lng,lat,ground_truth_exists,ground_truth_category,category_correct,source_type,source_title,source_reference,verified_at,verifier,notes
+SR-001,pending,,,,,,,,,,,,,,,,
+SR-002,pending,,,,,,,,,,,,,,,,
+SR-003,pending,,,,,,,,,,,,,,,,
+SR-004,pending,,,,,,,,,,,,,,,,
+SR-005,pending,,,,,,,,,,,,,,,,
+SR-006,pending,,,,,,,,,,,,,,,,
+SR-007,pending,,,,,,,,,,,,,,,,
+SR-008,pending,,,,,,,,,,,,,,,,
+SR-009,pending,,,,,,,,,,,,,,,,
+SR-010,pending,,,,,,,,,,,,,,,,

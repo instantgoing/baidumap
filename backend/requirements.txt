@@ -1,0 +1,5 @@
+fastapi>=0.104,<1
+httpx>=0.25,<1
+pydantic>=2,<3
+python-dotenv>=1,<2
+uvicorn[standard]>=0.24,<1

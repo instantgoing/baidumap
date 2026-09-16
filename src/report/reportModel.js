@@ -1,0 +1,186 @@
+export const REPORT_CATEGORY_LABELS = Object.freeze({
+  market: '菜市场',
+  pharmacy: '药店',
+  primary_school: '小学',
+  community_healthcare: '社区医疗',
+  hospital: '综合医院',
+  kindergarten: '幼儿园',
+  eldercare: '养老服务',
+  convenience_store: '便利店/超市',
+})
+
+export const REPORT_CATEGORY_ORDER = Object.freeze(Object.keys(REPORT_CATEGORY_LABELS))
+export const REQUIRED_CATEGORIES = Object.freeze(['market', 'pharmacy', 'primary_school'])
+
+export const DEFAULT_REPORT_CONFIG = Object.freeze({
+  version: 'coverage-report-v1',
+  targetPoiCount: 24,
+  weights: Object.freeze({
+    requiredCoverage: 0.3,
+    categoryCompleteness: 0.2,
+    facilityCount: 0.15,
+    spatialBalance: 0.15,
+    blindFree: 0.15,
+    dataConfidence: 0.05,
+  }),
+})
+
+function clamp(value, minimum = 0, maximum = 100) {
+  return Math.min(maximum, Math.max(minimum, Number.isFinite(value) ? value : minimum))
+}
+
+function ratio(value) {
+  return clamp(Number(value) * 100)
+}
+
+function scoreBand(score) {
+  if (score >= 85) return { key: 'excellent', label: '设施覆盖优秀' }
+  if (score >= 70) return { key: 'good', label: '设施覆盖良好' }
+  if (score >= 55) return { key: 'attention', label: '局部仍需关注' }
+  return { key: 'critical', label: '存在明显短板' }
+}
+
+function categoryCounts(data) {
+  const source = Array.isArray(data?.serviceAreaPois) ? data.serviceAreaPois : (data?.pois || [])
+  const counts = source.reduce((result, poi) => {
+    if (poi?.category) result[poi.category] = (result[poi.category] || 0) + 1
+    return result
+  }, {})
+  return Object.fromEntries(REPORT_CATEGORY_ORDER.map((category) => [category, Number(counts[category] || 0)]))
+}
+
+function polygonCentroid(points = []) {
+  const valid = points.map((point) => Array.isArray(point)
+    ? { lng: Number(point[0]), lat: Number(point[1]) }
+    : { lng: Number(point?.lng), lat: Number(point?.lat) })
+    .filter((point) => Number.isFinite(point.lng) && Number.isFinite(point.lat))
+  if (!valid.length) return null
+  return {
+    lng: valid.reduce((sum, point) => sum + point.lng, 0) / valid.length,
+    lat: valid.reduce((sum, point) => sum + point.lat, 0) / valid.length,
+  }
+}
+
+function confidenceScore(level) {
+  return ({ high: 100, medium: 75, low: 45 })[level] ?? 60
+}
+
+function timestampLabel(value) {
+  if (!value) return '未记录'
+  const date = new Date(value)
+  if (Number.isNaN(date.valueOf())) return String(value)
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(date)
+}
+
+export function buildReportModel({
+  data,
+  isochrone,
+  meta,
+  address = '',
+  center,
+  durationMinutes = 15,
+  completedAt,
+  warning = '',
+  config = DEFAULT_REPORT_CONFIG,
+} = {}) {
+  if (!data) return null
+  const counts = categoryCounts(data)
+  const blind = data.blindSpots || { coverage: {}, zones: [], evidence: {} }
+  const coverageRatios = REQUIRED_CATEGORIES.map((category) => Number(blind.coverage?.[category]?.coverageRatio || 0))
+  const requiredCoverage = ratio(coverageRatios.reduce((sum, value) => sum + value, 0) / REQUIRED_CATEGORIES.length)
+  const categoryCompleteness = ratio(REPORT_CATEGORY_ORDER.filter((category) => counts[category] > 0).length / REPORT_CATEGORY_ORDER.length)
+  const serviceAreaCount = Number(data.quality?.serviceAreaCount ?? data.serviceAreaPois?.length ?? 0)
+  const facilityCount = clamp(serviceAreaCount / Math.max(1, Number(config.targetPoiCount || 24)) * 100)
+  const maximumCoverage = Math.max(...coverageRatios, 0)
+  const minimumCoverage = Math.min(...coverageRatios)
+  const spatialBalance = maximumCoverage > 0 ? clamp((1 - (maximumCoverage - minimumCoverage)) * 100) : 0
+  const gridCellCount = Number(blind.evidence?.gridCellCount || 0)
+  const blindCellCount = Number(blind.evidence?.blindCellCount || 0)
+  const blindFree = gridCellCount ? clamp((1 - blindCellCount / gridCellCount) * 100) : 100
+  const dataConfidence = confidenceScore(isochrone?.confidence?.level)
+  const dimensions = {
+    requiredCoverage,
+    categoryCompleteness,
+    facilityCount,
+    spatialBalance,
+    blindFree,
+    dataConfidence,
+  }
+  const score = Math.round(Object.entries(config.weights).reduce((total, [key, weight]) => total + (dimensions[key] || 0) * weight, 0))
+  const band = scoreBand(score)
+  const categories = REPORT_CATEGORY_ORDER.map((category) => {
+    const coverage = REQUIRED_CATEGORIES.includes(category) ? ratio(blind.coverage?.[category]?.coverageRatio || 0) : null
+    const count = counts[category]
+    const state = REQUIRED_CATEGORIES.includes(category) && coverage < 70 ? 'critical' : count === 0 ? 'missing' : count < 3 ? 'attention' : 'good'
+    return { id: category, label: REPORT_CATEGORY_LABELS[category], count, coverage, state }
+  })
+  const candidateSites = (blind.zones || []).map((zone, index) => ({
+    id: `candidate-${zone.id || index + 1}`,
+    zoneId: zone.id || `zone-${index + 1}`,
+    location: polygonCentroid(zone.polygon) || center,
+    missingCategories: zone.missingCategories || [],
+    areaM2: Number(zone.areaM2 || 0),
+    note: '灰区质心预览，最终选址将在规划阶段结合道路与用地复核',
+  })).filter((site) => site.location)
+  const limitations = [
+    warning,
+    ...(isochrone?.warnings || []),
+    data.quality?.serviceAreaFilter !== 'polygon' ? '生活圈 POI 未按路网等时圈筛选，当前采用半径降级口径。' : '',
+    isochrone?.confidence?.level === 'low' ? '等时圈置信度较低，边界只宜用于趋势判断。' : '',
+  ].filter((item, index, items) => item && items.indexOf(item) === index)
+  const dataTimestamp = meta?.capturedAt || completedAt || null
+  const boundaryVerification = {
+    requestedDirections: Number(isochrone?.verification?.requestedDirections || 0),
+    checkedDirections: Number(isochrone?.verification?.checkedDirections || 0),
+    withinToleranceCount: Number(isochrone?.verification?.withinToleranceCount || 0),
+    passRatio: Number(isochrone?.verification?.passRatio || 0),
+  }
+  return {
+    score,
+    band,
+    dimensions,
+    categories,
+    candidateSites,
+    zones: blind.zones || [],
+    evidence: blind.evidence || {},
+    quality: data.quality || {},
+    address,
+    center: center || data.center,
+    durationMinutes,
+    reportVersion: config.version,
+    algorithmVersion: isochrone?.algorithmVersion || isochrone?.geojson?.properties?.algorithmVersion || '等时圈未生成',
+    confidence: isochrone?.confidence?.level || 'unavailable',
+    boundaryVerification,
+    dataTimestamp,
+    dataTimestampLabel: timestampLabel(dataTimestamp),
+    source: meta?.source || 'unknown',
+    formula: '总分 = 必测覆盖 30% + 种类完整 20% + 设施数量 15% + 空间均衡 15% + 非盲区 15% + 数据置信 5%',
+    limitations,
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character])
+}
+
+export function buildReportHtml(report) {
+  if (!report) throw new Error('导出报告前必须先完成一次分析')
+  const categoryRows = report.categories.map((category) => `<tr><td>${escapeHtml(category.label)}</td><td>${category.count}</td><td>${category.coverage === null ? '—' : `${Math.round(category.coverage)}%`}</td></tr>`).join('')
+  const zoneRows = report.zones.length
+    ? report.zones.map((zone) => `<tr><td>${escapeHtml(zone.id)}</td><td>${escapeHtml((zone.missingCategories || []).map((category) => REPORT_CATEGORY_LABELS[category] || category).join('、'))}</td><td>${Math.round(Number(zone.areaM2 || 0)).toLocaleString('zh-CN')} m²</td><td>${Number(zone.populationProxy || 0).toFixed(1)}</td></tr>`).join('')
+    : '<tr><td colspan="4">当前分析范围未识别到服务盲区</td></tr>'
+  const limitations = report.limitations.length ? report.limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join('') : '<li>未记录额外限制。</li>'
+  return `<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>邻里半径体检报告</title>
+<style>body{margin:0;color:#1f3034;font:14px/1.65 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:#edf3f1}main{max-width:900px;margin:28px auto;padding:42px;background:#fff}header{display:flex;justify-content:space-between;gap:30px;border-bottom:3px solid #167f76;padding-bottom:24px}.score{font-size:52px;font-weight:800;color:#167f76;line-height:1}.muted{color:#71817f}h1{margin:0 0 8px;font-size:28px}h2{margin-top:30px;font-size:18px}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #dde6e3;text-align:left}th{background:#f2f7f5}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 24px;margin-top:22px}.formula{padding:14px;background:#edf7f4;border-left:4px solid #167f76}@media print{body{background:#fff}main{margin:0;max-width:none;padding:18mm;box-shadow:none}@page{size:A4;margin:0}}</style></head>
+<body><main><header><div><div class="muted">${escapeHtml(report.durationMinutes)} 分钟生活圈 · 民生设施体检</div><h1>${escapeHtml(report.address || '自定义中心点')}</h1><div>${escapeHtml(report.band.label)}</div></div><div><div class="score">${report.score}</div><div class="muted">综合分 / 100</div></div></header>
+<section class="meta"><div><b>中心点：</b>${escapeHtml(`${report.center?.lng ?? '—'}, ${report.center?.lat ?? '—'} BD-09`)}</div><div><b>数据时间：</b>${escapeHtml(report.dataTimestampLabel)}</div><div><b>算法版本：</b>${escapeHtml(report.algorithmVersion)}</div><div><b>报告版本：</b>${escapeHtml(report.reportVersion)}</div><div><b>数据来源：</b>${escapeHtml(report.source)}</div><div><b>边界置信度：</b>${escapeHtml(report.confidence)}</div><div><b>边界复核：</b>${escapeHtml(`${report.boundaryVerification.withinToleranceCount}/${report.boundaryVerification.requestedDirections} 点达标`)}</div></section>
+<h2>评分依据</h2><p class="formula">${escapeHtml(report.formula)}</p>
+<h2>分类设施覆盖</h2><table><thead><tr><th>设施类别</th><th>生活圈内数量</th><th>1 公里网格覆盖</th></tr></thead><tbody>${categoryRows}</tbody></table>
+<h2>灰区清单</h2><table><thead><tr><th>灰区</th><th>缺失类别</th><th>面积</th><th>人口代理</th></tr></thead><tbody>${zoneRows}</tbody></table>
+<h2>限制与说明</h2><ul>${limitations}</ul><p class="muted">本报告的事实判断由确定性地图数据和算法生成；候选补点仅为灰区质心预览，不构成最终规划选址结论。</p>
+</main></body></html>`
+}

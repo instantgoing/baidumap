@@ -1,0 +1,14 @@
+{
+  "schema_version": "community-validation-v1",
+  "dataset_status": "template",
+  "dataset_id": "待填写",
+  "community": "待填写",
+  "center_bd09": { "lng": null, "lat": null },
+  "coordinate_system": "BD-09",
+  "data_time": "待填写",
+  "collected_by": "待填写",
+  "source_summary": [],
+  "limitations": [
+    "待填写：说明抽样范围、无法核验项、时间有效性与不可外推边界"
+  ]
+}

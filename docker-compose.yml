@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      BAIDU_BASE_URL: ${BAIDU_BASE_URL:-https://api.map.baidu.com}
+      BAIDU_MAX_QPS: ${BAIDU_MAX_QPS:-1}
+      BAIDU_QPS_WINDOW_SECONDS: ${BAIDU_QPS_WINDOW_SECONDS:-3.2}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:4173,http://127.0.0.1:4173}
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      args:
+        VITE_DATA_MODE: ${VITE_DATA_MODE:-online}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_BAIDU_BROWSER_AK: ${VITE_BAIDU_BROWSER_AK:-}
+    ports:
+      - "4173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

@@ -1,0 +1,36 @@
+{
+  "name": "baidumap",
+  "private": true,
+  "version": "0.6.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "demo": "node scripts/run-demo.js",
+    "build": "vite build",
+    "lint": "eslint .",
+    "test": "node --test tests/client.test.js tests/errorPresentation.test.js tests/mapLoader.test.js tests/mapLayers.test.js tests/mockData.test.js tests/isochrone.test.js tests/report.test.js",
+    "test:e2e": "node scripts/run-stage4-e2e.js",
+    "licenses": "node scripts/generate-licenses.js",
+    "check:repository": "node scripts/check-repository-layout.js",
+    "evidence:validate-template": "python backend/scripts/community_validation.py validate --input data/validation --template",
+    "benchmark:route-matrix": "python backend/scripts/route_matrix_benchmark.py --mode simulated --output artifacts/benchmarks/route-matrix-simulated.json",
+    "check:submission": "node scripts/check-submission.js",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "eslint": "^10.9.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.4",
+    "globals": "^17.11.0",
+    "vite": "^8.2.2"
+  }
+}

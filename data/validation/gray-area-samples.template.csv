@@ -1,0 +1,13 @@
+sample_id,verification_status,stratum,category,lng,lat,system_predicts_gray,ground_truth_is_gray,source_type,source_title,source_reference,verified_at,verifier,notes
+GA-001,pending,interior,market,,,,,,,,,,,
+GA-002,pending,interior,pharmacy,,,,,,,,,,,
+GA-003,pending,interior,primary_school,,,,,,,,,,,
+GA-004,pending,interior,market,,,,,,,,,,,
+GA-005,pending,edge,pharmacy,,,,,,,,,,,
+GA-006,pending,edge,primary_school,,,,,,,,,,,
+GA-007,pending,edge,market,,,,,,,,,,,
+GA-008,pending,edge,pharmacy,,,,,,,,,,,
+GA-009,pending,non_gray,primary_school,,,,,,,,,,,
+GA-010,pending,non_gray,market,,,,,,,,,,,
+GA-011,pending,non_gray,pharmacy,,,,,,,,,,,
+GA-012,pending,non_gray,primary_school,,,,,,,,,,,

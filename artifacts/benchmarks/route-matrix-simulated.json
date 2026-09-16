@@ -1,0 +1,442 @@
+{
+  "schemaVersion": "route-matrix-benchmark-v1",
+  "evidenceConfigVersion": "competition-evidence-v1",
+  "environment": {
+    "mode": "simulated",
+    "source": "offline-simulated",
+    "recordedAt": "2026-09-16T06:55:38.960623+00:00",
+    "python": "3.13.1",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD"
+  },
+  "sampleSize": {
+    "runsPerScenario": 5,
+    "scenarioCount": 4,
+    "totalRunRecords": 20
+  },
+  "confidence": {
+    "level": "simulation-only",
+    "basis": "all configured runs retained; no best-run selection"
+  },
+  "parameters": {
+    "runs": 5,
+    "destinationCount": 36,
+    "batchSize": 50,
+    "simulatedLatencyMs": 30,
+    "apiBaseUrl": null,
+    "cachePolicy": "cold uses unique inputs; cache-hit warms identical inputs before measurement"
+  },
+  "summaries": [
+    {
+      "strategy": "batch",
+      "cacheState": "cache-hit",
+      "runs": 5,
+      "elapsedMs": {
+        "mean": 0.335,
+        "median": 0.305,
+        "min": 0.277,
+        "max": 0.411,
+        "allRuns": [
+          0.411,
+          0.305,
+          0.39,
+          0.277,
+          0.293
+        ]
+      },
+      "meanLogicalRequests": 1,
+      "meanUpstreamCalls": 0,
+      "meanQuotaConsumption": 0,
+      "meanSuccessRate": 1.0
+    },
+    {
+      "strategy": "batch",
+      "cacheState": "cold",
+      "runs": 5,
+      "elapsedMs": {
+        "mean": 44.001,
+        "median": 47.028,
+        "min": 32.733,
+        "max": 47.522,
+        "allRuns": [
+          47.522,
+          47.304,
+          47.028,
+          45.417,
+          32.733
+        ]
+      },
+      "meanLogicalRequests": 1,
+      "meanUpstreamCalls": 1,
+      "meanQuotaConsumption": 1,
+      "meanSuccessRate": 1.0
+    },
+    {
+      "strategy": "point",
+      "cacheState": "cache-hit",
+      "runs": 5,
+      "elapsedMs": {
+        "mean": 0.86,
+        "median": 0.91,
+        "min": 0.739,
+        "max": 0.944,
+        "allRuns": [
+          0.927,
+          0.91,
+          0.944,
+          0.779,
+          0.739
+        ]
+      },
+      "meanLogicalRequests": 36,
+      "meanUpstreamCalls": 0,
+      "meanQuotaConsumption": 0,
+      "meanSuccessRate": 1.0
+    },
+    {
+      "strategy": "point",
+      "cacheState": "cold",
+      "runs": 5,
+      "elapsedMs": {
+        "mean": 1525.697,
+        "median": 1537.543,
+        "min": 1447.778,
+        "max": 1570.818,
+        "allRuns": [
+          1447.778,
+          1534.179,
+          1538.165,
+          1537.543,
+          1570.818
+        ]
+      },
+      "meanLogicalRequests": 36,
+      "meanUpstreamCalls": 36,
+      "meanQuotaConsumption": 36,
+      "meanSuccessRate": 1.0
+    }
+  ],
+  "comparisons": [
+    {
+      "cacheState": "cold",
+      "upstreamCallReduction": 0.972222,
+      "elapsedReduction": 0.97116,
+      "note": "离线模拟只证明实现与调用形态；在线结果受配额、网络和服务端缓存影响。"
+    },
+    {
+      "cacheState": "cache-hit",
+      "upstreamCallReduction": null,
+      "elapsedReduction": 0.610465,
+      "note": "离线模拟只证明实现与调用形态；在线结果受配额、网络和服务端缓存影响。"
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "strategy": "point",
+      "cacheState": "cold",
+      "source": "offline-simulated",
+      "logicalRequests": 36,
+      "upstreamCalls": 36,
+      "quotaConsumption": 36,
+      "cacheHits": 0,
+      "warmupUpstreamCalls": 0,
+      "elapsedMs": 1447.778,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 1,
+      "strategy": "batch",
+      "cacheState": "cold",
+      "source": "offline-simulated",
+      "logicalRequests": 1,
+      "upstreamCalls": 1,
+      "quotaConsumption": 1,
+      "cacheHits": 0,
+      "warmupUpstreamCalls": 0,
+      "elapsedMs": 47.522,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 1,
+      "strategy": "point",
+      "cacheState": "cache-hit",
+      "source": "offline-simulated",
+      "logicalRequests": 36,
+      "upstreamCalls": 0,
+      "quotaConsumption": 0,
+      "cacheHits": 36,
+      "warmupUpstreamCalls": 36,
+      "elapsedMs": 0.927,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 1,
+      "strategy": "batch",
+      "cacheState": "cache-hit",
+      "source": "offline-simulated",
+      "logicalRequests": 1,
+      "upstreamCalls": 0,
+      "quotaConsumption": 0,
+      "cacheHits": 1,
+      "warmupUpstreamCalls": 1,
+      "elapsedMs": 0.411,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 2,
+      "strategy": "point",
+      "cacheState": "cold",
+      "source": "offline-simulated",
+      "logicalRequests": 36,
+      "upstreamCalls": 36,
+      "quotaConsumption": 36,
+      "cacheHits": 0,
+      "warmupUpstreamCalls": 0,
+      "elapsedMs": 1534.179,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 2,
+      "strategy": "batch",
+      "cacheState": "cold",
+      "source": "offline-simulated",
+      "logicalRequests": 1,
+      "upstreamCalls": 1,
+      "quotaConsumption": 1,
+      "cacheHits": 0,
+      "warmupUpstreamCalls": 0,
+      "elapsedMs": 47.304,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 2,
+      "strategy": "point",
+      "cacheState": "cache-hit",
+      "source": "offline-simulated",
+      "logicalRequests": 36,
+      "upstreamCalls": 0,
+      "quotaConsumption": 0,
+      "cacheHits": 36,
+      "warmupUpstreamCalls": 36,
+      "elapsedMs": 0.91,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 2,
+      "strategy": "batch",
+      "cacheState": "cache-hit",
+      "source": "offline-simulated",
+      "logicalRequests": 1,
+      "upstreamCalls": 0,
+      "quotaConsumption": 0,
+      "cacheHits": 1,
+      "warmupUpstreamCalls": 1,
+      "elapsedMs": 0.305,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 3,
+      "strategy": "point",
+      "cacheState": "cold",
+      "source": "offline-simulated",
+      "logicalRequests": 36,
+      "upstreamCalls": 36,
+      "quotaConsumption": 36,
+      "cacheHits": 0,
+      "warmupUpstreamCalls": 0,
+      "elapsedMs": 1538.165,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 3,
+      "strategy": "batch",
+      "cacheState": "cold",
+      "source": "offline-simulated",
+      "logicalRequests": 1,
+      "upstreamCalls": 1,
+      "quotaConsumption": 1,
+      "cacheHits": 0,
+      "warmupUpstreamCalls": 0,
+      "elapsedMs": 47.028,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 3,
+      "strategy": "point",
+      "cacheState": "cache-hit",
+      "source": "offline-simulated",
+      "logicalRequests": 36,
+      "upstreamCalls": 0,
+      "quotaConsumption": 0,
+      "cacheHits": 36,
+      "warmupUpstreamCalls": 36,
+      "elapsedMs": 0.944,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 3,
+      "strategy": "batch",
+      "cacheState": "cache-hit",
+      "source": "offline-simulated",
+      "logicalRequests": 1,
+      "upstreamCalls": 0,
+      "quotaConsumption": 0,
+      "cacheHits": 1,
+      "warmupUpstreamCalls": 1,
+      "elapsedMs": 0.39,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 4,
+      "strategy": "point",
+      "cacheState": "cold",
+      "source": "offline-simulated",
+      "logicalRequests": 36,
+      "upstreamCalls": 36,
+      "quotaConsumption": 36,
+      "cacheHits": 0,
+      "warmupUpstreamCalls": 0,
+      "elapsedMs": 1537.543,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 4,
+      "strategy": "batch",
+      "cacheState": "cold",
+      "source": "offline-simulated",
+      "logicalRequests": 1,
+      "upstreamCalls": 1,
+      "quotaConsumption": 1,
+      "cacheHits": 0,
+      "warmupUpstreamCalls": 0,
+      "elapsedMs": 45.417,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 4,
+      "strategy": "point",
+      "cacheState": "cache-hit",
+      "source": "offline-simulated",
+      "logicalRequests": 36,
+      "upstreamCalls": 0,
+      "quotaConsumption": 0,
+      "cacheHits": 36,
+      "warmupUpstreamCalls": 36,
+      "elapsedMs": 0.779,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 4,
+      "strategy": "batch",
+      "cacheState": "cache-hit",
+      "source": "offline-simulated",
+      "logicalRequests": 1,
+      "upstreamCalls": 0,
+      "quotaConsumption": 0,
+      "cacheHits": 1,
+      "warmupUpstreamCalls": 1,
+      "elapsedMs": 0.277,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 5,
+      "strategy": "point",
+      "cacheState": "cold",
+      "source": "offline-simulated",
+      "logicalRequests": 36,
+      "upstreamCalls": 36,
+      "quotaConsumption": 36,
+      "cacheHits": 0,
+      "warmupUpstreamCalls": 0,
+      "elapsedMs": 1570.818,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 5,
+      "strategy": "batch",
+      "cacheState": "cold",
+      "source": "offline-simulated",
+      "logicalRequests": 1,
+      "upstreamCalls": 1,
+      "quotaConsumption": 1,
+      "cacheHits": 0,
+      "warmupUpstreamCalls": 0,
+      "elapsedMs": 32.733,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 5,
+      "strategy": "point",
+      "cacheState": "cache-hit",
+      "source": "offline-simulated",
+      "logicalRequests": 36,
+      "upstreamCalls": 0,
+      "quotaConsumption": 0,
+      "cacheHits": 36,
+      "warmupUpstreamCalls": 36,
+      "elapsedMs": 0.739,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    },
+    {
+      "run": 5,
+      "strategy": "batch",
+      "cacheState": "cache-hit",
+      "source": "offline-simulated",
+      "logicalRequests": 1,
+      "upstreamCalls": 0,
+      "quotaConsumption": 0,
+      "cacheHits": 1,
+      "warmupUpstreamCalls": 1,
+      "elapsedMs": 0.293,
+      "successfulDestinations": 36,
+      "destinationCount": 36,
+      "successRate": 1.0
+    }
+  ],
+  "limitations": [
+    "offline-simulated results are deterministic transport fixtures, not Baidu service latency",
+    "online-live mode calls the local FastAPI API and never reads or prints BAIDU_SERVICE_AK",
+    "quotaConsumption is measured as upstreamCalls delta; cache hits consume zero measured upstream calls",
+    "all run values are retained; summaries do not report only the best run"
+  ]
+}

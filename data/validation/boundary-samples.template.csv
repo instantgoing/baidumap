@@ -1,0 +1,13 @@
+sample_id,verification_status,bearing_degrees,boundary_lng,boundary_lat,system_predicted_seconds,independent_seconds,absolute_error_seconds,entry_offset_m,obstruction_notes,source_type,source_title,source_reference,verified_at,verifier,notes
+BD-001,pending,0,,,,,,,,,,,,,
+BD-002,pending,30,,,,,,,,,,,,,
+BD-003,pending,60,,,,,,,,,,,,,
+BD-004,pending,90,,,,,,,,,,,,,
+BD-005,pending,120,,,,,,,,,,,,,
+BD-006,pending,150,,,,,,,,,,,,,
+BD-007,pending,180,,,,,,,,,,,,,
+BD-008,pending,210,,,,,,,,,,,,,
+BD-009,pending,240,,,,,,,,,,,,,
+BD-010,pending,270,,,,,,,,,,,,,
+BD-011,pending,300,,,,,,,,,,,,,
+BD-012,pending,330,,,,,,,,,,,,,

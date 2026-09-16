@@ -1,0 +1,30 @@
+{
+  "version": "competition-evidence-v1",
+  "validation": {
+    "requiredCategories": ["market", "pharmacy", "primary_school"],
+    "minimumGroundTruthPoi": 30,
+    "minimumPerRequiredCategory": 5,
+    "minimumBoundarySamples": 12,
+    "minimumGrayAreaSamples": 12,
+    "boundaryToleranceSeconds": 60,
+    "allowedIndependentSourceTypes": [
+      "government_registry",
+      "institution_official_page",
+      "official_phone_log",
+      "field_observation"
+    ]
+  },
+  "benchmark": {
+    "defaultRuns": 5,
+    "minimumRuns": 3,
+    "routeDestinationCount": 36,
+    "batchSize": 50,
+    "simulatedLatencyMs": 30
+  },
+  "multiSource": {
+    "schemaVersion": "poi-provenance-v1",
+    "nameAndDistanceMatchMeters": 50,
+    "entranceOffsetReviewMeters": 80,
+    "nameSimilarityReviewThreshold": 0.86
+  }
+}
