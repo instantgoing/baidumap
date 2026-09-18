@@ -11,6 +11,10 @@ npm ci
 npm run demo
 ```
 
+## GitHub Pages 演示站
+
+项目内置静态演示部署：真实百度地图 JSAPI GL + Mock 分析数据，不依赖 FastAPI 后端。首次启用、浏览器端 AK 白名单和仓库变量配置见 [`docs/github-pages.md`](docs/github-pages.md)。推送到 `main` 后，`.github/workflows/pages.yml` 会自动构建并发布。
+
 打开 `http://127.0.0.1:4173`。`demo` 命令会强制使用仓库内固定样例，不需要 AK、FastAPI 或外网，也不会被本机 `.env.local` 覆盖。日常开发可使用 `npm run dev`。
 
 环境要求：Node.js 22 或 24；在线后端需 Python 3.13；容器路径需 Docker Compose v2。

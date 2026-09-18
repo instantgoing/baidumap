@@ -7,6 +7,7 @@
     "dev": "vite",
     "demo": "node scripts/run-demo.js",
     "build": "vite build",
+    "build:pages": "vite build --mode pages",
     "lint": "eslint .",
     "test": "node --test tests/client.test.js tests/errorPresentation.test.js tests/mapLoader.test.js tests/mapLayers.test.js tests/mockData.test.js tests/isochrone.test.js tests/report.test.js",
     "test:e2e": "node scripts/run-stage4-e2e.js",
