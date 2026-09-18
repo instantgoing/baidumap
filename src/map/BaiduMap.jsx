@@ -133,7 +133,7 @@ function OfflineHeatSymbol({ point, band, color, label }) {
   </g>
 }
 
-function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, candidates, layers, targetDurationSeconds, highDiscernibility, selectedZoneId, onSelectZone, onSelectPoint }) {
+function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, candidates, layers, targetDurationSeconds, highDiscernibility, selectedZoneId, onSelectZone, onSelectPoint, fallbackMessage = '' }) {
   const allPoints = useMemo(() => collectPoints({ center, pois, blindZones, blindCells, isochrone, heatmap, candidates }), [center, pois, blindZones, blindCells, isochrone, heatmap, candidates])
   const bounds = useMemo(() => {
     const lngs = allPoints.map((point) => point.lng)
@@ -232,6 +232,7 @@ function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, 
         {mapCenter && <g transform={`translate(${mapCenter.x} ${mapCenter.y})`}><circle r="22" fill="#fff" opacity=".9" /><circle r="13" fill="#0e837b" stroke="#152e2d" strokeWidth="4" /><circle r="34" fill="none" stroke="#152e2d" strokeWidth="3" /><path d="M-7 0H7M0-7V7" stroke="#fff" strokeWidth="3" /></g>}
         <text x="22" y="574" fill="#465552" fontSize="16">离线样例底图 · 点击地图可重新选点 · 坐标 BD-09</text>
       </svg>
+      {fallbackMessage && <div className="map-sdk-state map-sdk-state--error" role="alert">{fallbackMessage}；已自动切换到可交互离线底图。</div>}
       <div className="map-sdk-badge map-sdk-badge--sample">OFFLINE SNAPSHOT · 可交互</div>
     </div>
   )
@@ -456,7 +457,7 @@ export default function BaiduMap({
     return () => globalThis.clearTimeout(errorTimer)
   }, [center, pois, blindZones, blindCells, isochrone, heatmap, candidates, layers, targetDurationSeconds, highDiscernibility, selectedZoneId, status.state])
 
-  if (!browserAk) return <OfflineMap center={center} pois={pois} blindZones={blindZones} blindCells={blindCells} isochrone={isochrone} heatmap={heatmap} candidates={candidates} layers={layers} targetDurationSeconds={targetDurationSeconds} highDiscernibility={highDiscernibility} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} onSelectPoint={onSelectPoint} />
+  if (!browserAk || status.state === 'error') return <OfflineMap center={center} pois={pois} blindZones={blindZones} blindCells={blindCells} isochrone={isochrone} heatmap={heatmap} candidates={candidates} layers={layers} targetDurationSeconds={targetDurationSeconds} highDiscernibility={highDiscernibility} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} onSelectPoint={onSelectPoint} fallbackMessage={status.state === 'error' ? status.message : ''} />
 
   return (
     <div className={`baidu-map-shell${highDiscernibility ? ' baidu-map-shell--accessible' : ''}`}>

@@ -7,7 +7,7 @@
 1. 在百度地图开放平台创建“浏览器端”应用，将下列 Referer 加入白名单：
 
    ```text
-   https://instantgoing.github.io/*
+   *instantgoing.github.io*
    ```
 
 2. 打开 GitHub 仓库的 `Settings → Secrets and variables → Actions → Variables`，新增仓库变量：
