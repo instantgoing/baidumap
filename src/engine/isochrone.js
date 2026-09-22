@@ -77,6 +77,7 @@ async function measureCandidates({ center, candidates, routeMatrix, mode, batchS
       const records = responseRecords(response)
       batch.forEach((candidate, index) => measurements.push(normalizeMeasurement(records[index] || { status: 'api_error', message: '缺少对应结果' }, candidate, center)))
     } catch (error) {
+      if (error?.kind === 'cancelled') throw error
       batch.forEach((candidate) => measurements.push({ ...candidate, durationSeconds: null, distanceMeters: distanceMeters(center, candidate.point), status: 'api_error', error: error.message }))
     }
   }
@@ -391,6 +392,7 @@ async function snapBoundariesToSingleRoutes({ center, records, walkingRoute, rou
       })
       routeStates.push({ bearing: record.bearing, route, routeTimeSeconds: options.targetDurationSeconds, complete: false })
     } catch (error) {
+      if (error?.kind === 'cancelled') throw error
       warnings.push(`方向 ${Math.round(record.bearing)}° 单路线复核失败：${error.message}`)
     }
   }

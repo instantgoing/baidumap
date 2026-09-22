@@ -249,7 +249,7 @@ export function buildReportModel({
     missingCategories: zone.missingCategories || [],
     areaM2: Number(zone.areaM2 || 0),
     priorityScore: planningByZoneId.get(zone.id)?.priorityScore || 0,
-    note: 'P5 情景候选，最终选址仍需道路、用地、入口和独立核验复核',
+    note: '这是根据缺少设施的区域估算的参考位置，仅供参考，不是最终建设地点',
   })).filter((site) => site.location)
   const limitations = [
     warning,
@@ -317,6 +317,6 @@ ${narrativeSection}
 <h2>分类设施覆盖</h2><table><thead><tr><th>设施类别</th><th>生活圈内数量</th><th>1 公里网格覆盖</th></tr></thead><tbody>${categoryRows}</tbody></table>
 <h2>灰区清单</h2><table><thead><tr><th>灰区</th><th>缺失类别</th><th>面积</th><th>人口代理</th></tr></thead><tbody>${zoneRows}</tbody></table>
 ${planningSection}
-<h2>限制与说明</h2><ul>${limitations}</ul><p class="muted">本报告的事实判断由确定性地图数据和算法生成；候选补点仅为灰区质心预览，不构成最终规划选址结论。</p>
+<h2>限制与说明</h2><ul>${limitations}</ul><p class="muted">本报告的事实判断由确定性地图数据和算法生成；补设施位置只是参考，不是最终建设地点。</p>
 </main></body></html>`
 }

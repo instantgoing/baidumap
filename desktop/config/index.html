@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+    <title>配置百度地图 AK</title>
+    <link rel="stylesheet" href="./config.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div class="mark" aria-hidden="true">邻</div>
+        <div>
+          <p class="eyebrow">首次运行配置</p>
+          <h1>连接你的百度地图服务</h1>
+          <p class="lead">两个 AK 仅保存在当前电脑。服务端 AK 会使用 Windows 安全存储加密。</p>
+        </div>
+      </header>
+
+      <section class="notice" id="startup-notice" hidden></section>
+
+      <form id="config-form" novalidate>
+        <label class="field">
+          <span class="field__heading">浏览器端 AK</span>
+          <span class="field__hint">用于 JavaScript API 4.0。Referer 白名单需允许 localhost。</span>
+          <input id="browser-ak" name="browserAk" type="text" autocomplete="off" spellcheck="false" placeholder="请输入浏览器端 AK" required />
+          <small id="browser-current"></small>
+        </label>
+
+        <label class="field">
+          <span class="field__heading">服务端 AK</span>
+          <span class="field__hint">用于 Web Service API。已保存时留空即可继续使用原 AK。</span>
+          <div class="password-row">
+            <input id="service-ak" name="serviceAk" type="password" autocomplete="new-password" spellcheck="false" placeholder="请输入服务端 AK" />
+            <button id="toggle-service" class="reveal" type="button" aria-label="显示或隐藏服务端 AK">显示</button>
+          </div>
+          <small id="service-current"></small>
+        </label>
+
+        <aside class="requirements">
+          <strong>百度控制台要求</strong>
+          <ul>
+            <li>浏览器端 AK：启用 JavaScript API，并为本机来源配置 Referer 白名单。</li>
+            <li>服务端 AK：启用项目所需 Web API；当前版本使用 IP 校验，不支持 SN 校验。</li>
+          </ul>
+        </aside>
+
+        <div id="status" class="status" role="status" aria-live="polite" hidden></div>
+        <button id="submit" class="primary" type="submit">保存、验证并启动</button>
+        <button id="continue" class="secondary" type="button" hidden>验证失败，仍然进入应用</button>
+      </form>
+    </main>
+    <script src="./config.js"></script>
+  </body>
+</html>
+

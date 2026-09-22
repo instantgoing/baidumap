@@ -15,9 +15,12 @@ async function readJson(response, requestId) {
 
 export function createApiClient({ baseUrl = '/api', timeoutMs = 60000, fetchImpl = globalThis.fetch } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('当前环境没有可用的 fetch 实现')
-  async function request(path, { method = 'GET', body } = {}) {
+  async function request(path, { method = 'GET', body, signal } = {}) {
     const requestId = createRequestId()
     const controller = new AbortController()
+    const abortFromSignal = () => controller.abort()
+    if (signal?.aborted) controller.abort()
+    else signal?.addEventListener('abort', abortFromSignal, { once: true })
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
     try {
       const response = await fetchImpl(joinUrl(baseUrl, path), { method, signal: controller.signal, headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Request-ID': requestId }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
@@ -27,20 +30,21 @@ export function createApiClient({ baseUrl = '/api', timeoutMs = 60000, fetchImpl
       return { ...payload, meta: { ...payload.meta, requestId } }
     } catch (error) {
       if (error instanceof ApiError) throw error
+      if (error?.name === 'AbortError' && signal?.aborted) throw new ApiError('已停止当前搜索', { kind: 'cancelled', requestId, cause: error })
       if (error?.name === 'AbortError') throw new ApiError('地图服务请求超时', { kind: 'timeout', requestId, cause: error })
       throw new ApiError('无法连接地图服务，请检查网络或 API 地址', { kind: 'network', requestId, cause: error })
-    } finally { clearTimeout(timeoutId) }
+    } finally { clearTimeout(timeoutId); signal?.removeEventListener('abort', abortFromSignal) }
   }
   return {
     health: ({ verify = false } = {}) => request(`${API_PATHS.health}${verify ? '?verify=true' : ''}`),
-    geocode: ({ address }) => request(API_PATHS.geocode, { method: 'POST', body: { address } }),
+    geocode: ({ address, signal }) => request(API_PATHS.geocode, { method: 'POST', body: { address }, signal }),
     reverseGeocode: ({ location }) => request(API_PATHS.reverseGeocode, { method: 'POST', body: { location } }),
     convertCoordinates: ({ points, from = 'WGS84', to = 'BD-09' }) => request(API_PATHS.convertCoordinates, { method: 'POST', body: { points, from, to } }),
     searchPoi: ({ query, center, radius = 2000, page = 0, pageSize = 20, maxPages = 8, areaPolygon }) => request(API_PATHS.searchPoi, { method: 'POST', body: { query, center, radius, page, pageSize, maxPages, ...(areaPolygon?.length ? { areaPolygon } : {}) } }),
-    analyzePois: ({ center, areaPolygon, searchRadiusMeters = 2000, analysisRadiusMeters = 1000, gridSpacingMeters = 150, populationDensityPerKm2 = 8000, boundaryRecheck = true, pageSize = 20, maxPages = 8 }) => request(API_PATHS.analyzePois, { method: 'POST', body: { center, ...(areaPolygon?.length ? { areaPolygon } : {}), searchRadiusMeters, analysisRadiusMeters, gridSpacingMeters, populationDensityPerKm2, boundaryRecheck, pageSize, maxPages } }),
+    analyzePois: ({ center, areaPolygon, searchRadiusMeters = 2000, analysisRadiusMeters = 1000, gridSpacingMeters = 150, populationDensityPerKm2 = 8000, boundaryRecheck = true, pageSize = 20, maxPages = 8, signal }) => request(API_PATHS.analyzePois, { method: 'POST', body: { center, ...(areaPolygon?.length ? { areaPolygon } : {}), searchRadiusMeters, analysisRadiusMeters, gridSpacingMeters, populationDensityPerKm2, boundaryRecheck, pageSize, maxPages }, signal }),
     blindSpots: ({ center, pois, analysisRadiusMeters = 1000, gridSpacingMeters = 100, populationDensityPerKm2 = 8000, boundaryRecheck = true }) => request(API_PATHS.blindSpots, { method: 'POST', body: { center, pois, analysisRadiusMeters, gridSpacingMeters, populationDensityPerKm2, boundaryRecheck } }),
-    routeMatrix: ({ origin, destinations, mode = 'walking' }) => request(API_PATHS.routeMatrix, { method: 'POST', body: { origin, destinations, mode } }),
-    walkingRoute: ({ origin, destination }) => request(API_PATHS.walkingRoute, { method: 'POST', body: { origin, destination } }),
+    routeMatrix: ({ origin, destinations, mode = 'walking', signal }) => request(API_PATHS.routeMatrix, { method: 'POST', body: { origin, destinations, mode }, signal }),
+    walkingRoute: ({ origin, destination, signal }) => request(API_PATHS.walkingRoute, { method: 'POST', body: { origin, destination }, signal }),
   }
 }
 

@@ -100,14 +100,13 @@ function blindSurfaces(blindZones, blindCells, highDiscernibility) {
   return cells.length ? { exactCells: true, items: cells } : { exactCells: false, items: blindZones }
 }
 
-function collectPoints({ center, pois, blindZones, blindCells, isochrone, heatmap, candidates }) {
+function collectPoints({ center, pois, blindZones, blindCells, isochrone, heatmap }) {
   const points = [validPoint(center)]
   ;(isochrone?.geometry?.coordinates?.[0] || []).forEach((point) => points.push(validPoint(point)))
   pois.forEach((poi) => points.push(validPoint(poi.location)))
   const blindGeometry = blindCells.some((cell) => cell?.isBlindSpot) ? blindCells.filter((cell) => cell?.isBlindSpot) : blindZones
   blindGeometry.forEach((item) => (item.polygon || []).forEach((point) => points.push(validPoint(point))))
   heatmap.forEach((sample) => points.push(validPoint(sample)))
-  candidates.forEach((candidate) => points.push(validPoint(candidate.location)))
   return points.filter(Boolean)
 }
 
@@ -133,8 +132,8 @@ function OfflineHeatSymbol({ point, band, color, label }) {
   </g>
 }
 
-function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, candidates, layers, targetDurationSeconds, highDiscernibility, selectedZoneId, onSelectZone, onSelectPoint, fallbackMessage = '' }) {
-  const allPoints = useMemo(() => collectPoints({ center, pois, blindZones, blindCells, isochrone, heatmap, candidates }), [center, pois, blindZones, blindCells, isochrone, heatmap, candidates])
+function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, layers, targetDurationSeconds, highDiscernibility, selectedZoneId, onSelectZone, onSelectPoint, fallbackMessage = '' }) {
+  const allPoints = useMemo(() => collectPoints({ center, pois, blindZones, blindCells, isochrone, heatmap }), [center, pois, blindZones, blindCells, isochrone, heatmap])
   const bounds = useMemo(() => {
     const lngs = allPoints.map((point) => point.lng)
     const lats = allPoints.map((point) => point.lat)
@@ -212,7 +211,7 @@ function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, 
           return <g key={`zone-label-${zone.id || index}`} className={`map-zone-tag map-zone-tag--${visual.pattern}${selected ? ' is-selected' : ''}`} transform={`translate(${point.x + offsetX} ${point.y + offsetY})`} role="button" tabIndex="0" aria-label={`${getZoneCode(index)}，缺少 ${visual.missingLabels.join('、')}`} onClick={selectZone} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectZone(event) } }}>
             <rect x="-31" y="-18" width="62" height="36" rx="7" />
             <text className="map-zone-tag__title" x="0" y="-3" textAnchor="middle">{getZoneCode(index)}</text>
-            <text className="map-zone-tag__detail" x="0" y="11" textAnchor="middle">缺{visual.severity}类</text>
+            <text className="map-zone-tag__detail" x="0" y="11" textAnchor="middle">缺：{visual.missingLabels.join('、')}</text>
           </g>
         })}
         {layers.blindZones && highDiscernibility && selectedZoneId && blindZones.filter((zone) => zone.id === selectedZoneId).map((zone) => {
@@ -224,10 +223,6 @@ function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, 
           if (!point) return null
           const visual = getPoiVisual(poi.category)
           return <g key={poi.uid || index} transform={`translate(${point.x} ${point.y})`}><OfflineShape shape={visual.shape} color={POI_CATEGORY_COLORS[poi.category] || '#647377'} symbol={visual.symbol} /><title>{`${poi.name} · ${poi.categoryLabel || visual.label}`}</title></g>
-        })}
-        {layers.candidates && candidates.map((candidate, index) => {
-          const point = project(candidate.location)
-          return point && <g key={candidate.id || index} transform={`translate(${point.x} ${point.y})`}><OfflineShape shape="diamond" color="#f2b84b" symbol="补" /><title>{candidate.note}</title></g>
         })}
         {mapCenter && <g transform={`translate(${mapCenter.x} ${mapCenter.y})`}><circle r="22" fill="#fff" opacity=".9" /><circle r="13" fill="#0e837b" stroke="#152e2d" strokeWidth="4" /><circle r="34" fill="none" stroke="#152e2d" strokeWidth="3" /><path d="M-7 0H7M0-7V7" stroke="#fff" strokeWidth="3" /></g>}
         <text x="22" y="574" fill="#465552" fontSize="16">离线样例底图 · 点击地图可重新选点 · 坐标 BD-09</text>
@@ -248,7 +243,7 @@ function createZoneTag(zone, index, selected, onSelect) {
   const title = document.createElement('strong')
   title.textContent = getZoneCode(index)
   const detail = document.createElement('span')
-  detail.textContent = `缺${visual.severity}类`
+  detail.textContent = `缺：${visual.missingLabels.join('、')}`
   button.append(title, detail)
   button.addEventListener('click', (event) => {
     event.stopPropagation()
@@ -281,7 +276,6 @@ export default function BaiduMap({
   blindCells = [],
   isochrone,
   heatmap = [],
-  candidates = [],
   layers = MAP_LAYER_DEFAULTS,
   targetDurationSeconds = 900,
   highDiscernibility = true,
@@ -432,14 +426,6 @@ export default function BaiduMap({
         viewport.push(point)
       })
 
-      if (layers.candidates) candidates.forEach((candidate) => {
-        const location = validPoint(candidate.location)
-        if (!location) return
-        const point = new BMapGL.Point(location.lng, location.lat)
-        addShapeMarker({ BMapGL, map, point, shape: 'diamond', color: '#f2b84b', symbol: '补', size: 42, title: '候选补点', onClick: () => map.openInfoWindow(new BMapGL.InfoWindow(escapeHtml(candidate.note), { width: 240, title: '候选补点预览' }), point) })
-        viewport.push(point)
-      })
-
       const centerPoint = viewport[0]
       if (highDiscernibility) addShapeMarker({ BMapGL, map, point: centerPoint, shape: 'circle', color: '#0e837b', symbol: '中', size: 44, title: '分析中心点' })
       else {
@@ -455,9 +441,9 @@ export default function BaiduMap({
       errorTimer = globalThis.setTimeout(() => setStatus({ state: 'error', message: mapErrorMessage(error, '百度地图覆盖物渲染失败') }), 0)
     }
     return () => globalThis.clearTimeout(errorTimer)
-  }, [center, pois, blindZones, blindCells, isochrone, heatmap, candidates, layers, targetDurationSeconds, highDiscernibility, selectedZoneId, status.state])
+  }, [center, pois, blindZones, blindCells, isochrone, heatmap, layers, targetDurationSeconds, highDiscernibility, selectedZoneId, status.state])
 
-  if (!browserAk || status.state === 'error') return <OfflineMap center={center} pois={pois} blindZones={blindZones} blindCells={blindCells} isochrone={isochrone} heatmap={heatmap} candidates={candidates} layers={layers} targetDurationSeconds={targetDurationSeconds} highDiscernibility={highDiscernibility} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} onSelectPoint={onSelectPoint} fallbackMessage={status.state === 'error' ? status.message : ''} />
+  if (!browserAk || status.state === 'error') return <OfflineMap center={center} pois={pois} blindZones={blindZones} blindCells={blindCells} isochrone={isochrone} heatmap={heatmap} layers={layers} targetDurationSeconds={targetDurationSeconds} highDiscernibility={highDiscernibility} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} onSelectPoint={onSelectPoint} fallbackMessage={status.state === 'error' ? status.message : ''} />
 
   return (
     <div className={`baidu-map-shell${highDiscernibility ? ' baidu-map-shell--accessible' : ''}`}>

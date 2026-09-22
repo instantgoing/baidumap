@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { appConfig, getRuntimeSummary } from './config/appConfig.js'
 import { createAppClient } from './api/client.js'
 import { presentApiError } from './api/errorPresentation.js'
@@ -12,6 +12,8 @@ const DEFAULT_ADDRESS = '北京市海淀区中关村软件园'
 const DEFAULT_CENTER = { lng: 116.284206, lat: 40.051819 }
 const DURATION_OPTIONS = [5, 10, 15, 20]
 const REQUIRED_CATEGORIES = ['market', 'pharmacy', 'primary_school']
+const FAST_ANALYSIS_DIRECTIONS = 12
+const FAST_ANALYSIS_MAX_PAGES = 3
 
 const navItems = [
   { id: 'overview', label: '分析总览', icon: '⌂' },
@@ -32,11 +34,10 @@ const diagnosticItems = [
 ]
 
 const layerOptions = [
-  { id: 'isochrone', label: '等时圈边界', mark: 'ring' },
-  { id: 'heatmap', label: '耗时热力', mark: 'heat' },
-  { id: 'pois', label: '分类 POI', mark: 'poi' },
-  { id: 'blindZones', label: '服务灰区', mark: 'blind' },
-  { id: 'candidates', label: '候选补点', mark: 'candidate' },
+  { id: 'isochrone', label: '步行范围', mark: 'ring' },
+  { id: 'heatmap', label: '走路快慢', mark: 'heat' },
+  { id: 'pois', label: '附近设施', mark: 'poi' },
+  { id: 'blindZones', label: '缺东西的地方', mark: 'blind' },
 ]
 
 function formatTime(value) {
@@ -59,6 +60,11 @@ function candidateDistancesForMinutes(minutes) {
   return [0.2, 0.4, 0.6, 0.8, 1].map((ratio) => Math.round(maximum * ratio / 50) * 50)
 }
 
+function fastCandidateDistancesForMinutes(minutes) {
+  const maximum = Math.max(800, Math.round(minutes * 110))
+  return [0.25, 0.5, 0.75, 1].map((ratio) => Math.round(maximum * ratio / 50) * 50)
+}
+
 function StatusPill({ tone = 'neutral', children }) {
   return <span className={`status-pill status-pill--${tone}`}>{children}</span>
 }
@@ -78,6 +84,7 @@ export default function App() {
   const [selectedZoneId, setSelectedZoneId] = useState(null)
   const [analysis, setAnalysis] = useState({ status: 'idle', result: null, message: '', warning: '', failure: null, completedAt: null })
   const [isochrone, setIsochrone] = useState({ status: 'idle', result: null, message: '' })
+  const analysisControllerRef = useRef(null)
   const client = useMemo(() => createAppClient(appConfig), [])
   const runtime = useMemo(() => getRuntimeSummary(appConfig), [])
 
@@ -97,16 +104,33 @@ export default function App() {
 
   useEffect(() => { runHealthCheck() }, [runHealthCheck])
 
-  const calculateIsochrone = useCallback(async (analysisCenter) => {
+  const calculateIsochrone = useCallback(async (analysisCenter, signal, mode = 'full') => {
+    const fast = mode === 'fast'
+    const background = mode === 'background'
     const targetDurationSeconds = durationMinutes * 60
-    setIsochrone({ status: 'running', result: null, message: `正在通过步行 RouteMatrix 搜索 ${targetDurationSeconds} 秒边界…` })
+    setIsochrone((current) => ({
+      status: background ? 'refining' : 'running',
+      result: background ? current.result : null,
+      message: fast ? '正在快速估算步行范围…' : background ? '快速范围已显示，正在后台精细复核…' : `正在计算 ${durationMinutes} 分钟步行范围…`,
+    }))
     const engine = createIsochroneEngine({
-      routeMatrix: client.routeMatrix,
-      walkingRoute: client.walkingRoute,
-      config: { ...appConfig.isochrone, targetDurationSeconds, candidateDistancesMeters: candidateDistancesForMinutes(durationMinutes) },
+      routeMatrix: (options) => client.routeMatrix({ ...options, signal }),
+      walkingRoute: fast ? undefined : (options) => client.walkingRoute({ ...options, signal }),
+      config: fast ? {
+        ...appConfig.isochrone,
+        targetDurationSeconds,
+        directions: FAST_ANALYSIS_DIRECTIONS,
+        maxDirections: FAST_ANALYSIS_DIRECTIONS,
+        candidateDistancesMeters: fastCandidateDistancesForMinutes(durationMinutes),
+        boundaryToleranceSeconds: 120,
+        spatialToleranceMeters: 500,
+        maxRefinementRounds: 0,
+        verificationDirections: 0,
+        singleRouteRecheckRounds: 0,
+      } : { ...appConfig.isochrone, targetDurationSeconds, candidateDistancesMeters: candidateDistancesForMinutes(durationMinutes) },
     })
     const result = await engine.calculate({ center: analysisCenter })
-    setIsochrone({ status: 'success', result, message: `已完成 ${result.metrics.routeBatchCount} 批路线测时；内部交叉复核 ${result.verification.withinToleranceCount}/${result.verification.requestedDirections} 点达标，置信度 ${result.confidence.level}` })
+    setIsochrone({ status: 'success', result, message: fast ? '快速步行范围已生成' : '步行范围已完善' })
     return result
   }, [client, durationMinutes])
 
@@ -119,37 +143,78 @@ export default function App() {
   }, [calculateIsochrone, center])
 
   const runAnalysis = useCallback(async () => {
+    analysisControllerRef.current?.abort()
+    const controller = new AbortController()
+    analysisControllerRef.current = controller
     setSelectedZoneId(null)
-    setAnalysis({ status: 'geocoding', result: null, message: '正在确定分析中心点…', warning: '', failure: null, completedAt: null })
+    setAnalysis({ status: 'geocoding', result: null, message: '正在确认位置…', warning: '', failure: null, completedAt: null })
     let analysisCenter = center
     try {
       if (selectionSource === 'address') {
-        const geocoded = await client.geocode({ address: address.trim() })
+        const geocoded = await client.geocode({ address: address.trim(), signal: controller.signal })
+        if (controller.signal.aborted) return
         analysisCenter = geocoded.data.location
         setCenter(analysisCenter)
         setSelectionSource('resolved')
       }
 
       let areaPolygon
-      let warning = ''
+      let fastIsochrone
       try {
-        setAnalysis({ status: 'isochrone', result: null, message: `正在计算真实 ${durationMinutes} 分钟步行生活圈…`, warning: '', failure: null, completedAt: null })
-        const isochroneResult = await calculateIsochrone(analysisCenter)
-        areaPolygon = polygonFromIsochrone(isochroneResult)
+        setAnalysis({ status: 'isochrone', result: null, message: `正在快速计算 ${durationMinutes} 分钟步行范围…`, warning: '', failure: null, completedAt: null })
+        fastIsochrone = await calculateIsochrone(analysisCenter, controller.signal, 'fast')
+        if (controller.signal.aborted) return
+        areaPolygon = polygonFromIsochrone(fastIsochrone)
       } catch (error) {
+        if (controller.signal.aborted || error?.kind === 'cancelled') throw error
         const failure = presentApiError(error)
         setIsochrone({ status: 'error', result: null, message: failure.summary })
-        warning = `明确降级：等时圈失败，生活圈 POI 仅按 1 公里半径筛选。${failure.summary}`
+        areaPolygon = undefined
       }
 
-      setAnalysis({ status: 'poi', result: null, message: '正在分页获取、清洗 POI 并复核 1 公里服务灰区…', warning, failure: null, completedAt: null })
-      const result = await client.analyzePois({ center: analysisCenter, areaPolygon, searchRadiusMeters: 2000, analysisRadiusMeters: 1000, gridSpacingMeters: 150, boundaryRecheck: true, maxPages: 8 })
-      setAnalysis({ status: warning ? 'degraded' : 'success', result, message: `${warning ? '降级分析' : '分析'}完成：${result.data.quality.inSearchAreaCount} 个有效 POI，${result.data.blindSpots.zones.length} 个灰区`, warning, failure: null, completedAt: new Date().toISOString() })
+      setAnalysis({ status: 'poi', result: null, message: '正在快速查找附近设施…', warning: '', failure: null, completedAt: null })
+      const fastResult = await client.analyzePois({ center: analysisCenter, areaPolygon, searchRadiusMeters: 2000, analysisRadiusMeters: 1000, gridSpacingMeters: 150, boundaryRecheck: false, maxPages: FAST_ANALYSIS_MAX_PAGES, signal: controller.signal })
+      if (controller.signal.aborted) return
+      setAnalysis({ status: 'refining', result: fastResult, message: `快速结果已显示：找到 ${fastResult.data.quality.inSearchAreaCount} 个设施。正在后台完善路线和边界复核…`, warning: '当前为快速结果，后台完善后会自动更新。', failure: null, completedAt: null })
+
+      let refinedIsochrone
+      let backgroundWarning = ''
+      try {
+        refinedIsochrone = await calculateIsochrone(analysisCenter, controller.signal, 'background')
+        if (controller.signal.aborted) return
+      } catch (error) {
+        if (controller.signal.aborted || error?.kind === 'cancelled') throw error
+        backgroundWarning = '精细步行范围复核未完成，已保留快速结果。'
+        setIsochrone(fastIsochrone
+          ? { status: 'success', result: fastIsochrone, message: '精细复核未完成，已保留快速步行范围' }
+          : { status: 'error', result: null, message: '步行范围复核未完成' })
+      }
+
+      try {
+        const refinedPolygon = polygonFromIsochrone(refinedIsochrone)
+        const refinedResult = await client.analyzePois({ center: analysisCenter, areaPolygon: refinedPolygon.length ? refinedPolygon : areaPolygon, searchRadiusMeters: 2000, analysisRadiusMeters: 1000, gridSpacingMeters: 150, boundaryRecheck: true, maxPages: 8, signal: controller.signal })
+        if (controller.signal.aborted) return
+        setAnalysis({ status: backgroundWarning ? 'degraded' : 'success', result: refinedResult, message: `分析完成：找到 ${refinedResult.data.quality.inSearchAreaCount} 个设施，发现 ${refinedResult.data.blindSpots.zones.length} 个缺设施区域`, warning: backgroundWarning, failure: null, completedAt: new Date().toISOString() })
+      } catch (error) {
+        if (controller.signal.aborted || error?.kind === 'cancelled') throw error
+        if (fastIsochrone) setIsochrone({ status: 'success', result: fastIsochrone, message: '边界复核未完成，已保留快速步行范围' })
+        setAnalysis({ status: 'degraded', result: fastResult, message: '快速分析已完成，后台边界复核未完成。', warning: '当前保留快速结果，可稍后重新分析。', failure: null, completedAt: new Date().toISOString() })
+      }
     } catch (error) {
+      if (controller.signal.aborted || error?.kind === 'cancelled') return
       const failure = presentApiError(error)
       setAnalysis((current) => ({ ...current, status: 'error', result: null, message: failure.detail, failure }))
+    } finally {
+      if (analysisControllerRef.current === controller) analysisControllerRef.current = null
     }
   }, [address, calculateIsochrone, center, client, durationMinutes, selectionSource])
+
+  const stopAnalysis = useCallback(() => {
+    analysisControllerRef.current?.abort()
+    analysisControllerRef.current = null
+    setAnalysis({ status: 'idle', result: null, message: '已停止当前搜索，修改地址后可重新分析', warning: '', failure: null, completedAt: null })
+    setIsochrone({ status: 'idle', result: null, message: '' })
+  }, [])
 
   const selectPoint = useCallback(async (location, source = 'map') => {
     setSelectedZoneId(null)
@@ -220,24 +285,16 @@ export default function App() {
     URL.revokeObjectURL(url)
   }, [durationMinutes, report])
 
-  const mapZones = analysisData?.blindSpots?.zones || []
   const serviceLabel = runtime.mode === 'mock' && health.status === 'healthy' ? '样例数据就绪' : health.status === 'healthy' ? '百度 API 在线' : health.status === 'error' ? '服务异常' : '正在验证'
 
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">跳到主要内容</a>
-      <aside className="sidebar">
-        <div className="brand"><div className="brand-mark" aria-hidden="true"><span /><span /><span /></div><div><strong>邻里半径</strong><span>民生设施体检工具</span></div></div>
-        <div className="stage-card"><div className="stage-card__eyebrow">CURRENT STAGE</div><div className="stage-card__title">阶段 6 · 提交与演示</div><div className="stage-progress"><span style={{ width: '100%' }} /></div><div className="stage-card__meta"><span>文档、CI 与真实报告</span><span>7 / 7</span></div></div>
-        <nav className="sidebar-nav" aria-label="主导航"><div className="nav-caption">WORKSPACE</div>{navItems.map((item) => <button className={`nav-item ${activeView === item.id ? 'nav-item--active' : ''}`} aria-current={activeView === item.id ? 'page' : undefined} key={item.id} onClick={() => setActiveView(item.id)} type="button"><span className="nav-item__icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span>{item.id === 'analysis' && analysisData && <span className="nav-item__badge">{mapZones.length}</span>}{item.id === 'report' && report && <span className="nav-item__badge">{report.score}</span>}</button>)}</nav>
-        <div className="sidebar-footer"><div className="connection-label"><span className={`connection-dot ${health.status === 'error' ? 'connection-dot--error' : ''}`} />{runtime.modeLabel}</div><span className="version">v{appConfig.version}</span></div>
-      </aside>
-
       <main className="main-content" id="main-content">
-        <header className="topbar"><div className="breadcrumb"><span>邻里半径</span><b>/</b><strong>{navItems.find((item) => item.id === activeView)?.label}</strong></div><div className="topbar-actions"><StatusPill tone={health.status === 'healthy' ? 'green' : health.status === 'error' ? 'red' : 'amber'}><span className="pill-dot" />{serviceLabel}</StatusPill><div className="avatar" aria-label="邻里半径">邻</div></div></header>
+        <header className="topbar"><div className="topbar-identity"><div className="brand-mark" aria-hidden="true"><span /><span /><span /></div><div><strong>邻里半径</strong><span>民生设施体检工具</span></div></div><div className="breadcrumb"><span>邻里半径</span><b>/</b><strong>{navItems.find((item) => item.id === activeView)?.label}</strong></div><div className="topbar-actions"><StatusPill tone={health.status === 'healthy' ? 'green' : health.status === 'error' ? 'red' : 'amber'}><span className="pill-dot" />{serviceLabel}</StatusPill><div className="avatar" aria-label="邻里半径">邻</div></div></header>
         <div className="page-body">
           {activeView === 'overview' && <Overview health={health} analysis={analysis} report={report} onOpenAnalysis={() => setActiveView('analysis')} onOpenReport={() => setActiveView('report')} onHealthCheck={runHealthCheck} isChecking={isChecking} durationMinutes={durationMinutes} />}
-          {activeView === 'analysis' && <AnalysisView address={address} onAddressChange={(value) => { setAddress(value); setSelectionSource('address') }} center={center} selectionSource={selectionSource} durationMinutes={durationMinutes} onDurationChange={changeDuration} analysis={analysis} isochrone={isochrone} onRun={runAnalysis} onRunIsochrone={runIsochrone} browserAk={appConfig.browserMapAk} onSelectPoint={(location) => selectPoint(location, 'map')} onCoordinateSubmit={(location) => selectPoint(location, 'coordinates')} layers={layers} onToggleLayer={toggleLayer} highDiscernibility={highDiscernibility} onToggleHighDiscernibility={() => setHighDiscernibility((current) => !current)} selectedZoneId={selectedZoneId} onSelectZone={setSelectedZoneId} candidateSites={report?.candidateSites || []} onOpenReport={() => setActiveView('report')} />}
+          {activeView === 'analysis' && <AnalysisView address={address} onAddressChange={(value) => { setAddress(value); setSelectionSource('address') }} center={center} selectionSource={selectionSource} durationMinutes={durationMinutes} onDurationChange={changeDuration} analysis={analysis} isochrone={isochrone} onRun={runAnalysis} onStop={stopAnalysis} onRunIsochrone={runIsochrone} browserAk={appConfig.browserMapAk} onSelectPoint={(location) => selectPoint(location, 'map')} onCoordinateSubmit={(location) => selectPoint(location, 'coordinates')} layers={layers} onToggleLayer={toggleLayer} highDiscernibility={highDiscernibility} onToggleHighDiscernibility={() => setHighDiscernibility((current) => !current)} selectedZoneId={selectedZoneId} onSelectZone={setSelectedZoneId} onOpenReport={() => setActiveView('report')} />}
           {activeView === 'report' && <ReportView report={report} onOpenAnalysis={() => setActiveView('analysis')} onDownload={downloadReport} onPrint={() => globalThis.print()} />}
           {activeView === 'diagnostics' && <Diagnostics diagnostics={diagnostics} isRunning={isRunning} onRun={runDiagnostic} runtime={runtime} />}
           {activeView === 'settings' && <Settings runtime={runtime} health={health} durationMinutes={durationMinutes} />}
@@ -281,19 +338,19 @@ function CoordinateInput({ center, disabled, onSubmit }) {
 
 function AnalysisProgress({ analysis, onRetry }) {
   const stages = [
-    { id: 'geocoding', label: '定位' },
-    { id: 'isochrone', label: '路网等时圈' },
-    { id: 'poi', label: 'POI 与灰区' },
-    { id: 'success', label: '生成报告' },
+    { id: 'geocoding', label: '确认位置' },
+    { id: 'isochrone', label: '计算步行范围' },
+    { id: 'poi', label: '查找附近设施' },
+    { id: 'success', label: '整理结果' },
   ]
   const completed = ['success', 'degraded'].includes(analysis.status)
-  const currentIndex = analysis.status === 'idle' || analysis.status === 'error' ? -1 : completed ? stages.length - 1 : Math.max(0, stages.findIndex((stage) => stage.id === analysis.status))
-  const percentage = completed ? 100 : currentIndex < 0 ? 0 : [16, 48, 78][currentIndex] || 90
-  const headline = analysis.status === 'success' ? '分析与报告已完成' : analysis.status === 'degraded' ? '分析完成，但已明确降级' : analysis.status === 'error' ? '分析失败，可安全重试' : analysis.status === 'idle' ? '等待开始' : '正在执行分析流水线'
-  return <section className={`analysis-progress analysis-progress--${analysis.status}`} aria-live="polite" data-error-kind={analysis.failure?.kind || ''}><div className="analysis-progress__headline"><span className="analysis-progress__dot" /><div><strong>{headline}</strong><p>{analysis.message || '将依次执行定位、RouteMatrix、Place Search、灰区复核和报告计算。'}</p>{analysis.failure && <div className="failure-guidance" role="alert"><strong>{analysis.failure.title}</strong><span>{analysis.failure.action}</span>{analysis.failure.requestId && <code>request-id: {analysis.failure.requestId}</code>}</div>}{analysis.warning && <small>{analysis.warning}</small>}</div>{analysis.status === 'error' && <button className="button button--secondary" type="button" onClick={onRetry}>重新分析</button>}</div><div className="progress-track" role="progressbar" aria-label="分析进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow={percentage}><span style={{ width: `${percentage}%` }} /></div><ol className="progress-stages">{stages.map((stage, index) => <li className={completed || index < currentIndex ? 'is-done' : index === currentIndex ? 'is-current' : ''} key={stage.id}><span>{completed || index < currentIndex ? '✓' : index + 1}</span>{stage.label}</li>)}</ol></section>
+  const currentIndex = analysis.status === 'idle' || analysis.status === 'error' ? -1 : completed || analysis.status === 'refining' ? stages.length - 1 : Math.max(0, stages.findIndex((stage) => stage.id === analysis.status))
+  const percentage = completed ? 100 : analysis.status === 'refining' ? 90 : currentIndex < 0 ? 0 : [16, 48, 78][currentIndex] || 90
+  const headline = analysis.status === 'success' ? '分析完成' : analysis.status === 'degraded' ? '分析完成' : analysis.status === 'refining' ? '快速结果已生成，正在后台完善' : analysis.status === 'error' ? '分析失败，可以重试' : analysis.status === 'idle' ? '等待开始' : '正在分析'
+  return <section className={`analysis-progress analysis-progress--${analysis.status}`} aria-live="polite" data-error-kind={analysis.failure?.kind || ''}><div className="analysis-progress__headline"><span className="analysis-progress__dot" /><div><strong>{headline}</strong><p>{analysis.message || '点击上方按钮，开始查找附近设施和步行范围。'}</p>{analysis.failure && <div className="failure-guidance" role="alert"><strong>{analysis.failure.title}</strong><span>{analysis.failure.action}</span>{analysis.failure.requestId && <code>request-id: {analysis.failure.requestId}</code>}</div>}{analysis.warning && <small>{analysis.warning}</small>}</div>{analysis.status === 'error' && <button className="button button--secondary" type="button" onClick={onRetry}>重新分析</button>}</div><div className="progress-track" role="progressbar" aria-label="分析进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow={percentage}><span style={{ width: `${percentage}%` }} /></div><ol className="progress-stages">{stages.map((stage, index) => <li className={completed || index < currentIndex ? 'is-done' : index === currentIndex ? 'is-current' : ''} key={stage.id}><span>{completed || index < currentIndex ? '✓' : index + 1}</span>{stage.label}</li>)}</ol></section>
 }
 
-function AnalysisView({ address, onAddressChange, center, selectionSource, durationMinutes, onDurationChange, analysis, isochrone, onRun, onRunIsochrone, browserAk, onSelectPoint, onCoordinateSubmit, layers, onToggleLayer, highDiscernibility, onToggleHighDiscernibility, selectedZoneId, onSelectZone, candidateSites, onOpenReport }) {
+function AnalysisView({ address, onAddressChange, center, selectionSource, durationMinutes, onDurationChange, analysis, isochrone, onRun, onStop, onRunIsochrone, browserAk, onSelectPoint, onCoordinateSubmit, layers, onToggleLayer, highDiscernibility, onToggleHighDiscernibility, selectedZoneId, onSelectZone, onOpenReport }) {
   const data = analysis.result?.data
   const blind = data?.blindSpots
   const blindRatio = blind?.evidence?.gridCellCount ? blind.evidence.blindCellCount / blind.evidence.gridCellCount : null
@@ -301,37 +358,43 @@ function AnalysisView({ address, onAddressChange, center, selectionSource, durat
   const selectedZone = selectedZoneIndex >= 0 ? blind.zones[selectedZoneIndex] : null
   const selectedZoneVisual = selectedZone ? getBlindZoneVisual(selectedZone.missingCategories) : null
   const running = !['idle', 'success', 'degraded', 'error'].includes(analysis.status)
+  const isochroneRunning = running || ['running', 'refining'].includes(isochrone.status)
   const canRun = selectionSource !== 'address' || Boolean(address.trim())
+  const selectPointFromMap = (location) => {
+    if (data && !globalThis.confirm('更改中心点会清除当前分析结果，需要重新分析。\n\n确定要更改吗？')) return
+    if (running) onStop()
+    onSelectPoint(location)
+  }
   return <>
     <section className="page-heading page-heading--compact"><div><div className="eyebrow">INTERACTIVE ANALYSIS / STAGE 04</div><h1>生活圈分析工作台</h1><p>支持地址、BD-09 坐标和地图点击选点；设施盲区始终采用独立的 1 公里服务口径。</p></div>{['success', 'degraded'].includes(analysis.status) && <button className="button button--primary" type="button" onClick={onOpenReport}>查看完整报告 <span>→</span></button>}</section>
     <section className="analysis-controls">
       <div className="control-heading"><div><div className="section-kicker">ANALYSIS INPUT</div><h2>选择中心点与步行时长</h2></div><StatusPill tone="neutral">当前来源：{({ address: '地址', resolved: '地址解析', map: '地图点击', coordinates: '坐标输入' })[selectionSource] || selectionSource}</StatusPill></div>
-      <div className="duration-control"><span>步行时长</span><div role="group" aria-label="步行时长">{DURATION_OPTIONS.map((minutes) => <button key={minutes} className={durationMinutes === minutes ? 'is-active' : ''} aria-pressed={durationMinutes === minutes} onClick={() => onDurationChange(minutes)} type="button" disabled={running}>{minutes} 分钟</button>)}</div><small>时长影响真实路网等时圈；灰区仍按 1 公里设施服务半径判定。</small></div>
-      <form className="analysis-search" onSubmit={(event) => { event.preventDefault(); if (canRun && !running) onRun() }}><label className="sr-only" htmlFor="analysis-address">社区或地址</label><input id="analysis-address" value={address} onChange={(event) => onAddressChange(event.target.value)} placeholder="输入社区、道路或详细地址" disabled={running} /><button className="button button--primary" type="submit" disabled={running || !canRun}>{running ? '分析中…' : `分析 ${durationMinutes} 分钟生活圈`} <span>→</span></button></form>
+      <div className="duration-control"><span>步行时长</span><div role="group" aria-label="步行时长">{DURATION_OPTIONS.map((minutes) => <button key={minutes} className={durationMinutes === minutes ? 'is-active' : ''} aria-pressed={durationMinutes === minutes} onClick={() => onDurationChange(minutes)} type="button" disabled={running}>{minutes} 分钟</button>)}</div><small>选择你愿意步行的时间，系统会找出这个范围内的设施。</small></div>
+      <form className="analysis-search" onSubmit={(event) => { event.preventDefault(); if (canRun && !running) onRun() }}><label className="sr-only" htmlFor="analysis-address">社区或地址</label><input id="analysis-address" value={address} onChange={(event) => { if (running) onStop(); onAddressChange(event.target.value) }} placeholder="输入社区、道路或详细地址" />{running ? <button className="button button--secondary" type="button" onClick={onStop}>停止当前搜索</button> : <button className="button button--primary" type="submit" disabled={!canRun}>分析 {durationMinutes} 分钟生活圈 <span>→</span></button>}</form>
       <CoordinateInput key={`${center.lng}:${center.lat}`} center={center} disabled={running} onSubmit={onCoordinateSubmit} />
       <div className="analysis-coordinate">中心点 <strong>{center.lng.toFixed(6)}, {center.lat.toFixed(6)}</strong> <em>BD-09</em><span>键盘用户可用上方坐标输入替代地图选点</span></div>
     </section>
     <AnalysisProgress analysis={analysis} onRetry={onRun} />
-    <section className="map-card"><div className="map-card__header"><div><div className="section-kicker">MAP VISUALIZATION</div><h2>等时圈、耗时分级、设施与灰区</h2></div><button className="button button--outline button--small" type="button" onClick={onRunIsochrone} disabled={isochrone.status === 'running'}>{isochrone.status === 'running' ? '计算中…' : '单独重算等时圈'}</button></div><LayerControls layers={layers} onToggle={onToggleLayer} highDiscernibility={highDiscernibility} onToggleHighDiscernibility={onToggleHighDiscernibility} /><BaiduMap browserAk={browserAk} center={center} pois={data?.pois || []} blindZones={blind?.zones || []} blindCells={blind?.cells || []} isochrone={isochrone.result?.geojson} heatmap={isochrone.result?.heatmap || []} candidates={candidateSites} layers={layers} targetDurationSeconds={durationMinutes * 60} highDiscernibility={highDiscernibility} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} onSelectPoint={onSelectPoint} /><MapLegend targetDurationSeconds={durationMinutes * 60} highDiscernibility={highDiscernibility} />{highDiscernibility && <div className="map-reading-assist" aria-live="polite"><span aria-hidden="true">◎</span>{selectedZone ? <p><strong>{getZoneCode(selectedZoneIndex)} · 缺{selectedZoneVisual.severity}类设施</strong><span>{selectedZoneVisual.missingLabels.join('、')}；面积 {formatNumber(selectedZone.areaM2)} m²。地图与下方灰区清单已同步选中。</span></p> : <p><strong>高可辨模式已开启</strong><span>{blind?.zones?.length ? '选择地图中的 G 编号或下方灰区清单，可查看对应缺失设施。' : '边界、形状和纹理与颜色共同表达地图信息。'}</span></p>}</div>}<div className="map-card__footer"><div className="coordinate-line"><span className="pin-mini">⌖</span><span>中心点</span><strong>{center.lng.toFixed(6)}, {center.lat.toFixed(6)}</strong><em>BD-09</em></div><div className="map-footer-note">{data ? `${data.pois.length} 个 POI · ${blind.zones.length} 个灰区 · ${candidateSites.length} 个候选质心` : '等待分析数据'}</div></div></section>
-    <section className="metric-grid"><MetricCard label="清洗后 POI" value={data ? formatNumber(data.quality.inSearchAreaCount) : '—'} detail={data ? `原始 ${data.quality.rawCount} · 排除 ${data.quality.excludedCount}` : '等待 Place Search'} tone="blue" icon="⌖" /><MetricCard label="生活圈内 POI" value={data ? formatNumber(data.quality.serviceAreaCount) : '—'} detail={data?.quality.serviceAreaFilter === 'polygon' ? `按 ${durationMinutes} 分钟路网筛选` : '按 1 公里半径筛选'} tone="green" icon="◌" /><MetricCard label="盲区网格占比" value={blindRatio === null ? '—' : `${Math.round(blindRatio * 100)}%`} detail={blind ? `${blind.evidence.blindCellCount} / ${blind.evidence.gridCellCount} 个网格` : '等待分析'} tone="amber" icon="▧" /><MetricCard label="等时圈置信度" value={isochrone.result?.confidence?.level || '—'} detail={isochrone.result ? `边界复核 ${isochrone.result.verification?.withinToleranceCount || 0}/${isochrone.result.verification?.requestedDirections || 0} 点达标` : '等待 RouteMatrix'} tone="purple" icon="⇄" /></section>
+    <section className="map-card"><div className="map-card__header"><div><div className="section-kicker">地图</div><h2>你能走到哪里</h2></div><button className="button button--outline button--small" type="button" onClick={onRunIsochrone} disabled={isochroneRunning}>{analysis.status === 'refining' ? '后台完善中…' : isochroneRunning ? '正在计算…' : '重新算范围'}</button></div><LayerControls layers={layers} onToggle={onToggleLayer} highDiscernibility={highDiscernibility} onToggleHighDiscernibility={onToggleHighDiscernibility} /><BaiduMap browserAk={browserAk} center={center} pois={data?.pois || []} blindZones={blind?.zones || []} blindCells={blind?.cells || []} isochrone={isochrone.result?.geojson} heatmap={isochrone.result?.heatmap || []} layers={layers} targetDurationSeconds={durationMinutes * 60} highDiscernibility={highDiscernibility} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} onSelectPoint={selectPointFromMap} /><MapLegend targetDurationSeconds={durationMinutes * 60} highDiscernibility={highDiscernibility} />{highDiscernibility && <div className="map-reading-assist" aria-live="polite"><span aria-hidden="true">◎</span>{selectedZone ? <p><strong>{getZoneCode(selectedZoneIndex)}：少{selectedZoneVisual.severity}种</strong><span>少了：{selectedZoneVisual.missingLabels.join('、')}。点下面的列表看详情。</span></p> : <p><strong>清晰显示已打开</strong><span>{blind?.zones?.length ? '点地图上的灰区，查看少了什么。' : '边界和图案会帮你看懂地图。'}</span></p>}</div>}<div className="map-card__footer"><div className="coordinate-line"><span className="pin-mini">⌖</span><span>你的位置</span><strong>{center.lng.toFixed(6)}, {center.lat.toFixed(6)}</strong><em>BD-09</em></div><div className="map-footer-note">{data ? `${data.pois.length} 个附近设施 · ${blind.zones.length} 个缺口` : '还没有分析结果'}</div></div></section>
+    <section className="metric-grid"><MetricCard label="附近找到的设施" value={data ? formatNumber(data.quality.inSearchAreaCount) : '—'} detail={data ? '已去掉重复和无效信息' : '还没开始查找'} tone="blue" icon="⌖" /><MetricCard label="能走到的设施" value={data ? formatNumber(data.quality.serviceAreaCount) : '—'} detail={data?.quality.serviceAreaFilter === 'polygon' ? `${durationMinutes} 分钟内可以走到` : '按 1 公里范围计算'} tone="green" icon="◌" /><MetricCard label="缺设施的区域" value={blindRatio === null ? '—' : `${Math.round(blindRatio * 100)}%`} detail={blind ? '缺菜市场、药店或小学' : '还没开始分析'} tone="amber" icon="▧" /><MetricCard label="步行范围准确度" value={analysis.status === 'refining' ? '快速结果' : ({ high: '高', medium: '一般', low: '低' })[isochrone.result?.confidence?.level] || '—'} detail={analysis.status === 'refining' ? '后台正在精细复核' : isochrone.result ? '已根据步行路线检查' : '还没计算步行范围'} tone="purple" icon="⇄" /></section>
     {data && <P3Evidence data={data} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} />}
   </>
 }
 
 function LayerControls({ layers, onToggle, highDiscernibility, onToggleHighDiscernibility }) {
-  return <div className="layer-controls" aria-label="地图图层和显示方式"><span>图层</span>{layerOptions.map((option) => <button type="button" key={option.id} className={layers[option.id] ? 'is-active' : ''} aria-pressed={layers[option.id]} onClick={() => onToggle(option.id)}><i className={`layer-mark layer-mark--${option.mark}`} aria-hidden="true" />{option.label}<b>{layers[option.id] ? '开' : '关'}</b></button>)}<button type="button" className={`discernibility-toggle${highDiscernibility ? ' is-active' : ''}`} aria-pressed={highDiscernibility} onClick={onToggleHighDiscernibility}><i aria-hidden="true">Aa</i>高可辨模式<b>{highDiscernibility ? '开' : '关'}</b></button></div>
+  return <div className="layer-controls" aria-label="地图显示选项"><span>显示</span>{layerOptions.map((option) => <button type="button" key={option.id} className={layers[option.id] ? 'is-active' : ''} aria-pressed={layers[option.id]} onClick={() => onToggle(option.id)}><i className={`layer-mark layer-mark--${option.mark}`} aria-hidden="true" />{option.label}<b>{layers[option.id] ? '开' : '关'}</b></button>)}<button type="button" className={`discernibility-toggle${highDiscernibility ? ' is-active' : ''}`} aria-pressed={highDiscernibility} onClick={onToggleHighDiscernibility}><i aria-hidden="true">Aa</i>清晰显示<b>{highDiscernibility ? '开' : '关'}</b></button></div>
 }
 
 function MapLegend({ targetDurationSeconds, highDiscernibility }) {
   const durationBands = [getDurationBand(0, targetDurationSeconds), getDurationBand(targetDurationSeconds / 2, targetDurationSeconds), getDurationBand(targetDurationSeconds, targetDurationSeconds)]
-  return <div className={`map-legend map-legend--expanded${highDiscernibility ? ' is-accessible' : ''}`} aria-label="地图图例"><span><i className="legend-shape legend-shape--center" aria-hidden="true">中</i>中心点</span><span><i className="legend-shape legend-shape--boundary" aria-hidden="true" />{Math.round(targetDurationSeconds / 60)} 分钟步行边界</span>{durationBands.map((band) => <span key={band.id}><i className={`legend-time legend-time--${band.shape}`} aria-hidden="true" />{band.label}</span>)}<span><i className="legend-pattern legend-pattern--single" aria-hidden="true" />灰区缺1类</span><span><i className="legend-pattern legend-pattern--double" aria-hidden="true" />缺2类</span><span><i className="legend-pattern legend-pattern--triple" aria-hidden="true" />缺3类</span><span><i className="legend-shape legend-shape--candidate" aria-hidden="true">补</i>候选补点</span>{REQUIRED_CATEGORIES.map((category) => { const visual = getPoiVisual(category); return <span key={category}><i className={`poi-symbol poi-symbol--${visual.shape}`} style={{ backgroundColor: POI_CATEGORY_COLORS[category] }} aria-hidden="true">{visual.symbol}</i>{REPORT_CATEGORY_LABELS[category]}</span> })}</div>
+  return <div className={`map-legend map-legend--expanded${highDiscernibility ? ' is-accessible' : ''}`} aria-label="怎么看地图"><span><i className="legend-shape legend-shape--center" aria-hidden="true">中</i>你的位置</span><span><i className="legend-shape legend-shape--boundary" aria-hidden="true" />{Math.round(targetDurationSeconds / 60)}分钟能走到</span>{durationBands.map((band, index) => <span key={band.id}><i className={`legend-time legend-time--${band.shape}`} aria-hidden="true" />{['5分钟内', '5到10分钟', '10分钟以上'][index]}</span>)}<span className="legend-explanation">设施 = 菜市场、药店、小学</span><span><i className="legend-pattern legend-pattern--single" aria-hidden="true" />少1类设施</span><span><i className="legend-pattern legend-pattern--double" aria-hidden="true" />少2类设施</span><span><i className="legend-pattern legend-pattern--triple" aria-hidden="true" />少3类设施</span>{REQUIRED_CATEGORIES.map((category) => { const visual = getPoiVisual(category); return <span key={category}><i className={`poi-symbol poi-symbol--${visual.shape}`} style={{ backgroundColor: POI_CATEGORY_COLORS[category] }} aria-hidden="true">{visual.symbol}</i>{REPORT_CATEGORY_LABELS[category]}</span> })}</div>
 }
 
 function P3Evidence({ data, selectedZoneId, onSelectZone }) {
   const blind = data.blindSpots
   return <div className="p3-grid">
     <section className="evidence-card"><div className="section-kicker">COVERAGE EVIDENCE</div><h2>三类必测设施覆盖</h2><div className="coverage-list">{REQUIRED_CATEGORIES.map((category) => { const value = blind.coverage[category] || {}; return <div className="coverage-row" key={category}><span>{REPORT_CATEGORY_LABELS[category]}</span><div><i style={{ width: `${Math.round((value.coverageRatio || 0) * 100)}%` }} /></div><strong>{Math.round((value.coverageRatio || 0) * 100)}%</strong><small>{value.missingCellCount || 0} 个缺失网格</small></div> })}</div><div className="quality-strip"><span>原始召回 <strong>{data.quality.rawCount}</strong></span><span>去重后 <strong>{data.quality.dedupedCount}</strong></span><span>排除误召回 <strong>{data.quality.excludedCount}</strong></span><span>待复核 <strong>{data.quality.needsReviewCount || 0}</strong></span></div></section>
-    <section className="evidence-card"><div className="section-kicker">GRAY ZONE AUDIT</div><h2>灰区判定证据</h2><div className="zone-list">{blind.zones.length === 0 ? <div className="empty-state">分析范围内未发现三类设施服务盲区。</div> : blind.zones.slice(0, 12).map((zone, index) => { const visual = getBlindZoneVisual(zone.missingCategories); return <button type="button" className={`zone-item zone-item--${visual.pattern}${zone.id === selectedZoneId ? ' is-selected' : ''}`} key={zone.id} aria-pressed={zone.id === selectedZoneId} onClick={() => onSelectZone(zone.id)}><div><strong>{getZoneCode(index)} · {zone.id}</strong><span>缺{visual.severity}类：{visual.missingLabels.join('、')}</span></div><p>{formatNumber(zone.areaM2)} m² · 人口代理 {formatNumber(zone.populationProxy, 1)} · {zone.evidence.cellCount} 个连续网格</p><small>范围 POI：菜市场 {zone.evidence.facilityCounts.market || 0} / 药店 {zone.evidence.facilityCounts.pharmacy || 0} / 小学 {zone.evidence.facilityCounts.primary_school || 0}；边界候选 {zone.evidence.boundaryCandidateCellCount || 0}</small></button> })}</div></section>
+    <section className="evidence-card"><div className="section-kicker">GRAY ZONE AUDIT</div><h2>灰区判定证据</h2><div className="zone-list">{blind.zones.length === 0 ? <div className="empty-state">分析范围内未发现三类设施服务盲区。</div> : blind.zones.slice(0, 12).map((zone, index) => { const visual = getBlindZoneVisual(zone.missingCategories); return <button type="button" className={`zone-item zone-item--${visual.pattern}${zone.id === selectedZoneId ? ' is-selected' : ''}`} key={zone.id} aria-pressed={zone.id === selectedZoneId} onClick={() => onSelectZone(zone.id)}><div><strong>{getZoneCode(index)} · {zone.id}</strong><span>缺{visual.severity}类设施：{visual.missingLabels.join('、')}</span></div><p>{formatNumber(zone.areaM2)} m² · 人口代理 {formatNumber(zone.populationProxy, 1)} · {zone.evidence.cellCount} 个连续网格</p><small>范围 POI：菜市场 {zone.evidence.facilityCounts.market || 0} / 药店 {zone.evidence.facilityCounts.pharmacy || 0} / 小学 {zone.evidence.facilityCounts.primary_school || 0}；边界候选 {zone.evidence.boundaryCandidateCellCount || 0}</small></button> })}</div></section>
     <section className="evidence-card evidence-card--wide"><div className="section-kicker">POI SAMPLE</div><h2>分类 POI 明细</h2><div className="poi-table"><div className="poi-table__head"><span>名称</span><span>类别</span><span>距中心</span><span>地址</span></div>{data.pois.slice(0, 30).map((poi, index) => <div className="poi-table__row" key={poi.uid || `${poi.name}-${index}`}><strong>{poi.name}</strong><span>{poi.categoryLabel || REPORT_CATEGORY_LABELS[poi.category] || poi.category}</span><span>{formatNumber(poi.distance)} m</span><small>{poi.address || '—'}</small></div>)}</div>{data.pois.length > 30 && <div className="table-note">当前展示前 30 条，共 {data.pois.length} 条；完整结果保留在接口响应中。</div>}</section>
   </div>
 }
@@ -343,7 +406,7 @@ function ReportView({ report, onOpenAnalysis, onDownload, onPrint }) {
     <section className="report-summary"><div className={`score-panel score-panel--${report.band.key}`}><div className="score-ring" style={{ '--score': `${report.score * 3.6}deg` }}><strong>{report.score}</strong><span>/ 100</span></div><div><StatusPill tone={report.score >= 70 ? 'green' : 'amber'}>{report.band.label}</StatusPill><h2>确定性覆盖评分</h2><p>{report.formula}</p>{report.narrative && <div className="report-narrative"><strong>{report.narrative.headline}</strong><p>{report.narrative.finding}</p><p>{report.narrative.action}</p><small>{report.narrative.evidence}</small></div>}</div></div><RadarChart dimensions={report.dimensions} /></section>
     <section className="report-section"><div className="report-section__heading"><div><div className="section-kicker">CATEGORY COVERAGE</div><h2>八类民生设施概览</h2></div><p>数量取生活圈空间筛选结果；菜市场、药店、小学同时展示 1 公里网格覆盖率。</p></div><div className="category-card-grid">{report.categories.map((category) => <article className={`category-card category-card--${category.state}`} key={category.id}><span className="category-card__dot" style={{ background: POI_CATEGORY_COLORS[category.id] || '#71817d' }} /><div><small>{category.label}</small><strong>{category.count}</strong><span>{category.coverage === null ? '生活圈内设施' : `网格覆盖 ${Math.round(category.coverage)}%`}</span></div></article>)}</div></section>
     <section className="report-chart-grid"><BarChart categories={report.categories} /><section className="report-card"><div className="section-kicker">SCORE EVIDENCE</div><h2>评分维度</h2><div className="dimension-list">{Object.entries({ requiredCoverage: '必测覆盖', categoryCompleteness: '种类完整', facilityCount: '设施数量', spatialBalance: '空间均衡', blindFree: '非盲区占比', dataConfidence: '数据置信' }).map(([key, label]) => <div key={key}><span>{label}</span><div><i style={{ width: `${Math.round(report.dimensions[key])}%` }} /></div><strong>{Math.round(report.dimensions[key])}</strong></div>)}</div><p className="report-note">评分阈值集中在版本化配置中；页面直接展示公式和原始证据，不使用 AI 决定是否达标。</p></section></section>
-    <section className="report-section"><div className="report-section__heading"><div><div className="section-kicker">GRAY ZONE LIST</div><h2>服务灰区与候选质心</h2></div><p>候选点进入 P5 情景排序，但不替代道路、用地、入口和独立核验。</p></div><div className="report-zone-list">{report.zones.length === 0 ? <div className="empty-state">当前范围未识别到服务灰区。</div> : report.zones.map((zone, index) => <article key={zone.id}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{zone.id}</strong><p>缺失：{zone.missingCategories.map((category) => REPORT_CATEGORY_LABELS[category] || category).join('、')}</p></div><div><strong>{formatNumber(zone.areaM2)} m²</strong><small>人口代理 {formatNumber(zone.populationProxy, 1)}</small></div></article>)}</div></section>
+    <section className="report-section"><div className="report-section__heading"><div><div className="section-kicker">GRAY ZONE LIST</div><h2>服务灰区与补设施位置</h2></div><p>补设施位置只是参考，不是最终建设地点。</p></div><div className="report-zone-list">{report.zones.length === 0 ? <div className="empty-state">当前范围未识别到服务灰区。</div> : report.zones.map((zone, index) => <article key={zone.id}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{zone.id}</strong><p>缺失：{zone.missingCategories.map((category) => REPORT_CATEGORY_LABELS[category] || category).join('、')}</p></div><div><strong>{formatNumber(zone.areaM2)} m²</strong><small>人口代理 {formatNumber(zone.populationProxy, 1)}</small></div></article>)}</div></section>
     {report.planning && <PlanningSection planning={report.planning} />}
     <section className="report-audit"><div><div className="section-kicker">AUDIT TRAIL</div><h2>数据与算法记录</h2></div><dl><div><dt>数据时间</dt><dd>{report.dataTimestampLabel}</dd></div><div><dt>数据来源</dt><dd>{report.source}</dd></div><div><dt>等时圈算法</dt><dd>{report.algorithmVersion}</dd></div><div><dt>边界置信度</dt><dd>{report.confidence}</dd></div><div><dt>边界复核</dt><dd>{report.boundaryVerification.withinToleranceCount}/{report.boundaryVerification.requestedDirections} 点达标</dd></div><div><dt>报告版本</dt><dd>{report.reportVersion}</dd></div><div><dt>网格样本</dt><dd>{report.evidence.gridCellCount || 0} 个</dd></div></dl>{report.limitations.length > 0 && <div className="limitations"><strong>限制与降级说明</strong><ul>{report.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>}</section>
   </div>

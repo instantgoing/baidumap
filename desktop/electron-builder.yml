@@ -1,0 +1,51 @@
+appId: com.neighborhoodradius.desktop
+productName: 邻里半径
+copyright: Copyright © 2026 Neighborhood Radius contributors
+asar: true
+compression: maximum
+electronDist: node_modules/electron/dist
+
+directories:
+  output: release
+
+files:
+  - main.cjs
+  - preload.cjs
+  - config/**/*
+  - runtime/**/*
+  - package.json
+
+extraResources:
+  - from: ../dist
+    to: web
+    filter:
+      - "**/*"
+  - from: out/backend/baidumap-backend
+    to: backend
+    filter:
+      - "**/*"
+  - from: ../LICENSE
+    to: legal/LICENSE
+  - from: ../NOTICE
+    to: legal/NOTICE
+  - from: ../THIRD_PARTY_NOTICES.md
+    to: legal/THIRD_PARTY_NOTICES.md
+
+win:
+  icon: ../public/favicon.svg
+  target:
+    - target: nsis
+      arch:
+        - x64
+  executableName: NeighborhoodRadius
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 邻里半径
+  artifactName: "NeighborhoodRadius-Setup-${version}-${arch}.${ext}"
+  deleteAppDataOnUninstall: false
