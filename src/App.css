@@ -41,6 +41,13 @@ button { font: inherit; }
 @keyframes pulse { 50% { opacity: .45; transform: scale(.82); } }
 
 .baidu-map-shell { position: relative; height: 440px; background: #e8f0ec; }
+.map-fullscreen { position: relative; }
+.map-fullscreen:fullscreen { width: 100vw; height: 100vh; background: #e8f0ec; }
+.map-fullscreen:fullscreen .baidu-map-shell { height: 100%; }
+.map-fullscreen__button { position: absolute; right: 16px; bottom: 16px; z-index: 5; min-height: 40px; padding: 8px 14px; color: #263638; background: rgba(255,255,255,.96); border: 1px solid #bfcfcb; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 700; }
+.map-fullscreen__button:hover { background: #edf7f4; }
+.map-fullscreen__button:disabled { cursor: not-allowed; opacity: .6; }
+.map-fullscreen__error { position: absolute; right: 16px; bottom: 64px; z-index: 5; padding: 8px 10px; color: #a9514d; background: #fff5f4; border-radius: 5px; font-size: 11px; }
 .baidu-map-canvas { position: absolute; inset: 0; }
 .map-sdk-state { position: absolute; inset: 0; display: grid; place-items: center; padding: 30px; color: #697b78; background: linear-gradient(135deg, #edf5f2, #e2ece8); font-size: 12px; text-align: center; z-index: 3; }
 .map-sdk-state--error { color: #a9514d; background: #fff5f4; }
@@ -159,9 +166,6 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .legend-explanation { color: #496560; font-weight: 700; }
 
 /* Color-independent map language: line styles, shapes, textures and text labels. */
-.discernibility-toggle { margin-left: auto; border-width: 2px !important; }
-.discernibility-toggle > i { display: inline-grid; place-items: center; width: 20px; height: 15px; color: #273436; background: repeating-linear-gradient(45deg, #fff 0 3px, #9fa7a7 3px 5px); border: 1px solid #384244; border-radius: 3px; font: 7px 'DM Mono', monospace; font-style: normal; }
-.discernibility-toggle.is-active { color: #172b2a !important; background: #fff !important; border-color: #263638 !important; box-shadow: 0 0 0 1px #263638; }
 .baidu-map-shell--accessible { background: #f0f1ee; }
 .map-time-boundary-label rect { fill: rgba(255,255,255,.96); stroke: #183c39; stroke-width: 3; }
 .map-time-boundary-label text { fill: #183c39; font-size: 18px; font-weight: 800; }

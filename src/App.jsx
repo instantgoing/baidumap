@@ -80,7 +80,6 @@ export default function App() {
   const [selectionSource, setSelectionSource] = useState('address')
   const [durationMinutes, setDurationMinutes] = useState(15)
   const [layers, setLayers] = useState({ ...MAP_LAYER_DEFAULTS })
-  const [highDiscernibility, setHighDiscernibility] = useState(true)
   const [selectedZoneId, setSelectedZoneId] = useState(null)
   const [analysis, setAnalysis] = useState({ status: 'idle', result: null, message: '', warning: '', failure: null, completedAt: null })
   const [isochrone, setIsochrone] = useState({ status: 'idle', result: null, message: '' })
@@ -294,7 +293,7 @@ export default function App() {
         <header className="topbar"><div className="topbar-identity"><div className="brand-mark" aria-hidden="true"><span /><span /><span /></div><div><strong>邻里半径</strong><span>民生设施体检工具</span></div></div><div className="breadcrumb"><span>邻里半径</span><b>/</b><strong>{navItems.find((item) => item.id === activeView)?.label}</strong></div><div className="topbar-actions"><StatusPill tone={health.status === 'healthy' ? 'green' : health.status === 'error' ? 'red' : 'amber'}><span className="pill-dot" />{serviceLabel}</StatusPill><div className="avatar" aria-label="邻里半径">邻</div></div></header>
         <div className="page-body">
           {activeView === 'overview' && <Overview health={health} analysis={analysis} report={report} onOpenAnalysis={() => setActiveView('analysis')} onOpenReport={() => setActiveView('report')} onHealthCheck={runHealthCheck} isChecking={isChecking} durationMinutes={durationMinutes} />}
-          {activeView === 'analysis' && <AnalysisView address={address} onAddressChange={(value) => { setAddress(value); setSelectionSource('address') }} center={center} selectionSource={selectionSource} durationMinutes={durationMinutes} onDurationChange={changeDuration} analysis={analysis} isochrone={isochrone} onRun={runAnalysis} onStop={stopAnalysis} onRunIsochrone={runIsochrone} browserAk={appConfig.browserMapAk} onSelectPoint={(location) => selectPoint(location, 'map')} onCoordinateSubmit={(location) => selectPoint(location, 'coordinates')} layers={layers} onToggleLayer={toggleLayer} highDiscernibility={highDiscernibility} onToggleHighDiscernibility={() => setHighDiscernibility((current) => !current)} selectedZoneId={selectedZoneId} onSelectZone={setSelectedZoneId} onOpenReport={() => setActiveView('report')} />}
+          {activeView === 'analysis' && <AnalysisView address={address} onAddressChange={(value) => { setAddress(value); setSelectionSource('address') }} center={center} selectionSource={selectionSource} durationMinutes={durationMinutes} onDurationChange={changeDuration} analysis={analysis} isochrone={isochrone} onRun={runAnalysis} onStop={stopAnalysis} onRunIsochrone={runIsochrone} browserAk={appConfig.browserMapAk} onSelectPoint={(location) => selectPoint(location, 'map')} onCoordinateSubmit={(location) => selectPoint(location, 'coordinates')} layers={layers} onToggleLayer={toggleLayer} selectedZoneId={selectedZoneId} onSelectZone={setSelectedZoneId} onOpenReport={() => setActiveView('report')} />}
           {activeView === 'report' && <ReportView report={report} onOpenAnalysis={() => setActiveView('analysis')} onDownload={downloadReport} onPrint={() => globalThis.print()} />}
           {activeView === 'diagnostics' && <Diagnostics diagnostics={diagnostics} isRunning={isRunning} onRun={runDiagnostic} runtime={runtime} />}
           {activeView === 'settings' && <Settings runtime={runtime} health={health} durationMinutes={durationMinutes} />}
@@ -350,7 +349,7 @@ function AnalysisProgress({ analysis, onRetry }) {
   return <section className={`analysis-progress analysis-progress--${analysis.status}`} aria-live="polite" data-error-kind={analysis.failure?.kind || ''}><div className="analysis-progress__headline"><span className="analysis-progress__dot" /><div><strong>{headline}</strong><p>{analysis.message || '点击上方按钮，开始查找附近设施和步行范围。'}</p>{analysis.failure && <div className="failure-guidance" role="alert"><strong>{analysis.failure.title}</strong><span>{analysis.failure.action}</span>{analysis.failure.requestId && <code>request-id: {analysis.failure.requestId}</code>}</div>}{analysis.warning && <small>{analysis.warning}</small>}</div>{analysis.status === 'error' && <button className="button button--secondary" type="button" onClick={onRetry}>重新分析</button>}</div><div className="progress-track" role="progressbar" aria-label="分析进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow={percentage}><span style={{ width: `${percentage}%` }} /></div><ol className="progress-stages">{stages.map((stage, index) => <li className={completed || index < currentIndex ? 'is-done' : index === currentIndex ? 'is-current' : ''} key={stage.id}><span>{completed || index < currentIndex ? '✓' : index + 1}</span>{stage.label}</li>)}</ol></section>
 }
 
-function AnalysisView({ address, onAddressChange, center, selectionSource, durationMinutes, onDurationChange, analysis, isochrone, onRun, onStop, onRunIsochrone, browserAk, onSelectPoint, onCoordinateSubmit, layers, onToggleLayer, highDiscernibility, onToggleHighDiscernibility, selectedZoneId, onSelectZone, onOpenReport }) {
+function AnalysisView({ address, onAddressChange, center, selectionSource, durationMinutes, onDurationChange, analysis, isochrone, onRun, onStop, onRunIsochrone, browserAk, onSelectPoint, onCoordinateSubmit, layers, onToggleLayer, selectedZoneId, onSelectZone, onOpenReport }) {
   const data = analysis.result?.data
   const blind = data?.blindSpots
   const blindRatio = blind?.evidence?.gridCellCount ? blind.evidence.blindCellCount / blind.evidence.gridCellCount : null
@@ -375,19 +374,57 @@ function AnalysisView({ address, onAddressChange, center, selectionSource, durat
       <div className="analysis-coordinate">中心点 <strong>{center.lng.toFixed(6)}, {center.lat.toFixed(6)}</strong> <em>BD-09</em><span>键盘用户可用上方坐标输入替代地图选点</span></div>
     </section>
     <AnalysisProgress analysis={analysis} onRetry={onRun} />
-    <section className="map-card"><div className="map-card__header"><div><div className="section-kicker">地图</div><h2>你能走到哪里</h2></div><button className="button button--outline button--small" type="button" onClick={onRunIsochrone} disabled={isochroneRunning}>{analysis.status === 'refining' ? '后台完善中…' : isochroneRunning ? '正在计算…' : '重新算范围'}</button></div><LayerControls layers={layers} onToggle={onToggleLayer} highDiscernibility={highDiscernibility} onToggleHighDiscernibility={onToggleHighDiscernibility} /><BaiduMap browserAk={browserAk} center={center} pois={data?.pois || []} blindZones={blind?.zones || []} blindCells={blind?.cells || []} isochrone={isochrone.result?.geojson} heatmap={isochrone.result?.heatmap || []} layers={layers} targetDurationSeconds={durationMinutes * 60} highDiscernibility={highDiscernibility} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} onSelectPoint={selectPointFromMap} /><MapLegend targetDurationSeconds={durationMinutes * 60} highDiscernibility={highDiscernibility} />{highDiscernibility && <div className="map-reading-assist" aria-live="polite"><span aria-hidden="true">◎</span>{selectedZone ? <p><strong>{getZoneCode(selectedZoneIndex)}：少{selectedZoneVisual.severity}种</strong><span>少了：{selectedZoneVisual.missingLabels.join('、')}。点下面的列表看详情。</span></p> : <p><strong>清晰显示已打开</strong><span>{blind?.zones?.length ? '点地图上的灰区，查看少了什么。' : '边界和图案会帮你看懂地图。'}</span></p>}</div>}<div className="map-card__footer"><div className="coordinate-line"><span className="pin-mini">⌖</span><span>你的位置</span><strong>{center.lng.toFixed(6)}, {center.lat.toFixed(6)}</strong><em>BD-09</em></div><div className="map-footer-note">{data ? `${data.pois.length} 个附近设施 · ${blind.zones.length} 个缺口` : '还没有分析结果'}</div></div></section>
+    <section className="map-card"><div className="map-card__header"><div><div className="section-kicker">地图</div><h2>你能走到哪里</h2></div><button className="button button--outline button--small" type="button" onClick={onRunIsochrone} disabled={isochroneRunning}>{analysis.status === 'refining' ? '后台完善中…' : isochroneRunning ? '正在计算…' : '重新算范围'}</button></div><LayerControls layers={layers} onToggle={onToggleLayer} /><FullscreenMap browserAk={browserAk} center={center} pois={data?.pois || []} blindZones={blind?.zones || []} blindCells={blind?.cells || []} isochrone={isochrone.result?.geojson} heatmap={isochrone.result?.heatmap || []} layers={layers} targetDurationSeconds={durationMinutes * 60} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} onSelectPoint={selectPointFromMap} /><MapLegend targetDurationSeconds={durationMinutes * 60} /><div className="map-reading-assist" aria-live="polite"><span aria-hidden="true">◎</span>{selectedZone ? <p><strong>{getZoneCode(selectedZoneIndex)}：少{selectedZoneVisual.severity}种</strong><span>少了：{selectedZoneVisual.missingLabels.join('、')}。点下面的列表看详情。</span></p> : <p><strong>清晰显示已打开</strong><span>{blind?.zones?.length ? '点地图上的灰区，查看少了什么。' : '边界和图案会帮你看懂地图。'}</span></p>}</div><div className="map-card__footer"><div className="coordinate-line"><span className="pin-mini">⌖</span><span>你的位置</span><strong>{center.lng.toFixed(6)}, {center.lat.toFixed(6)}</strong><em>BD-09</em></div><div className="map-footer-note">{data ? `${data.pois.length} 个附近设施 · ${blind.zones.length} 个缺口` : '还没有分析结果'}</div></div></section>
     <section className="metric-grid"><MetricCard label="附近找到的设施" value={data ? formatNumber(data.quality.inSearchAreaCount) : '—'} detail={data ? '已去掉重复和无效信息' : '还没开始查找'} tone="blue" icon="⌖" /><MetricCard label="能走到的设施" value={data ? formatNumber(data.quality.serviceAreaCount) : '—'} detail={data?.quality.serviceAreaFilter === 'polygon' ? `${durationMinutes} 分钟内可以走到` : '按 1 公里范围计算'} tone="green" icon="◌" /><MetricCard label="缺设施的区域" value={blindRatio === null ? '—' : `${Math.round(blindRatio * 100)}%`} detail={blind ? '缺菜市场、药店或小学' : '还没开始分析'} tone="amber" icon="▧" /><MetricCard label="步行范围准确度" value={analysis.status === 'refining' ? '快速结果' : ({ high: '高', medium: '一般', low: '低' })[isochrone.result?.confidence?.level] || '—'} detail={analysis.status === 'refining' ? '后台正在精细复核' : isochrone.result ? '已根据步行路线检查' : '还没计算步行范围'} tone="purple" icon="⇄" /></section>
     {data && <P3Evidence data={data} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} />}
   </>
 }
 
-function LayerControls({ layers, onToggle, highDiscernibility, onToggleHighDiscernibility }) {
-  return <div className="layer-controls" aria-label="地图显示选项"><span>显示</span>{layerOptions.map((option) => <button type="button" key={option.id} className={layers[option.id] ? 'is-active' : ''} aria-pressed={layers[option.id]} onClick={() => onToggle(option.id)}><i className={`layer-mark layer-mark--${option.mark}`} aria-hidden="true" />{option.label}<b>{layers[option.id] ? '开' : '关'}</b></button>)}<button type="button" className={`discernibility-toggle${highDiscernibility ? ' is-active' : ''}`} aria-pressed={highDiscernibility} onClick={onToggleHighDiscernibility}><i aria-hidden="true">Aa</i>清晰显示<b>{highDiscernibility ? '开' : '关'}</b></button></div>
+function FullscreenMap(props) {
+  const containerRef = useRef(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fullscreenError, setFullscreenError] = useState('')
+  const fullscreenSupported = typeof document !== 'undefined' && document.fullscreenEnabled && typeof document.documentElement.requestFullscreen === 'function'
+
+  useEffect(() => {
+    const syncFullscreen = () => setIsFullscreen(document.fullscreenElement === containerRef.current)
+    const exitOnEscape = (event) => {
+      if (event.key === 'Escape' && document.fullscreenElement === containerRef.current) {
+        document.exitFullscreen().catch(() => setFullscreenError('无法退出全屏，请重试。'))
+      }
+    }
+    document.addEventListener('fullscreenchange', syncFullscreen)
+    document.addEventListener('keydown', exitOnEscape)
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreen)
+      document.removeEventListener('keydown', exitOnEscape)
+    }
+  }, [])
+
+  const toggleFullscreen = async () => {
+    setFullscreenError('')
+    try {
+      if (document.fullscreenElement === containerRef.current) await document.exitFullscreen()
+      else await containerRef.current.requestFullscreen()
+    } catch {
+      setFullscreenError('无法切换全屏，请检查浏览器设置。')
+    }
+  }
+
+  return <div className="map-fullscreen" ref={containerRef}>
+    <BaiduMap {...props} />
+    <button className="map-fullscreen__button" type="button" onClick={toggleFullscreen} disabled={!fullscreenSupported} aria-pressed={isFullscreen} title={fullscreenSupported ? undefined : '当前浏览器不支持地图全屏'}>{isFullscreen ? '退出全屏' : '全屏查看'}</button>
+    {fullscreenError && <div className="map-fullscreen__error" role="alert">{fullscreenError}</div>}
+  </div>
 }
 
-function MapLegend({ targetDurationSeconds, highDiscernibility }) {
+function LayerControls({ layers, onToggle }) {
+  return <div className="layer-controls" aria-label="地图显示选项"><span>显示</span>{layerOptions.map((option) => <button type="button" key={option.id} className={layers[option.id] ? 'is-active' : ''} aria-pressed={layers[option.id]} onClick={() => onToggle(option.id)}><i className={`layer-mark layer-mark--${option.mark}`} aria-hidden="true" />{option.label}<b>{layers[option.id] ? '开' : '关'}</b></button>)}</div>
+}
+
+function MapLegend({ targetDurationSeconds }) {
   const durationBands = [getDurationBand(0, targetDurationSeconds), getDurationBand(targetDurationSeconds / 2, targetDurationSeconds), getDurationBand(targetDurationSeconds, targetDurationSeconds)]
-  return <div className={`map-legend map-legend--expanded${highDiscernibility ? ' is-accessible' : ''}`} aria-label="怎么看地图"><span><i className="legend-shape legend-shape--center" aria-hidden="true">中</i>你的位置</span><span><i className="legend-shape legend-shape--boundary" aria-hidden="true" />{Math.round(targetDurationSeconds / 60)}分钟能走到</span>{durationBands.map((band, index) => <span key={band.id}><i className={`legend-time legend-time--${band.shape}`} aria-hidden="true" />{['5分钟内', '5到10分钟', '10分钟以上'][index]}</span>)}<span className="legend-explanation">设施 = 菜市场、药店、小学</span><span><i className="legend-pattern legend-pattern--single" aria-hidden="true" />少1类设施</span><span><i className="legend-pattern legend-pattern--double" aria-hidden="true" />少2类设施</span><span><i className="legend-pattern legend-pattern--triple" aria-hidden="true" />少3类设施</span>{REQUIRED_CATEGORIES.map((category) => { const visual = getPoiVisual(category); return <span key={category}><i className={`poi-symbol poi-symbol--${visual.shape}`} style={{ backgroundColor: POI_CATEGORY_COLORS[category] }} aria-hidden="true">{visual.symbol}</i>{REPORT_CATEGORY_LABELS[category]}</span> })}</div>
+  return <div className="map-legend map-legend--expanded is-accessible" aria-label="怎么看地图"><span><i className="legend-shape legend-shape--center" aria-hidden="true">中</i>你的位置</span><span><i className="legend-shape legend-shape--boundary" aria-hidden="true" />{Math.round(targetDurationSeconds / 60)}分钟能走到</span>{durationBands.map((band, index) => <span key={band.id}><i className={`legend-time legend-time--${band.shape}`} aria-hidden="true" />{['5分钟内', '5到10分钟', '10分钟以上'][index]}</span>)}<span className="legend-explanation">设施 = 菜市场、药店、小学</span><span><i className="legend-pattern legend-pattern--single" aria-hidden="true" />少1类设施</span><span><i className="legend-pattern legend-pattern--double" aria-hidden="true" />少2类设施</span><span><i className="legend-pattern legend-pattern--triple" aria-hidden="true" />少3类设施</span>{REQUIRED_CATEGORIES.map((category) => { const visual = getPoiVisual(category); return <span key={category}><i className={`poi-symbol poi-symbol--${visual.shape}`} style={{ backgroundColor: POI_CATEGORY_COLORS[category] }} aria-hidden="true">{visual.symbol}</i>{REPORT_CATEGORY_LABELS[category]}</span> })}</div>
 }
 
 function P3Evidence({ data, selectedZoneId, onSelectZone }) {

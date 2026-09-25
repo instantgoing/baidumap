@@ -93,10 +93,8 @@ function zoneLabelOffset(index) {
   return offsets[index % offsets.length]
 }
 
-function blindSurfaces(blindZones, blindCells, highDiscernibility) {
-  const cells = highDiscernibility
-    ? blindCells.filter((cell) => cell?.isBlindSpot && Array.isArray(cell.polygon) && cell.polygon.length >= 3)
-    : []
+function blindSurfaces(blindZones, blindCells) {
+  const cells = blindCells.filter((cell) => cell?.isBlindSpot && Array.isArray(cell.polygon) && cell.polygon.length >= 3)
   return cells.length ? { exactCells: true, items: cells } : { exactCells: false, items: blindZones }
 }
 
@@ -132,7 +130,7 @@ function OfflineHeatSymbol({ point, band, color, label }) {
   </g>
 }
 
-function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, layers, targetDurationSeconds, highDiscernibility, selectedZoneId, onSelectZone, onSelectPoint, fallbackMessage = '' }) {
+function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, layers, targetDurationSeconds, selectedZoneId, onSelectZone, onSelectPoint, fallbackMessage = '' }) {
   const allPoints = useMemo(() => collectPoints({ center, pois, blindZones, blindCells, isochrone, heatmap }), [center, pois, blindZones, blindCells, isochrone, heatmap])
   const bounds = useMemo(() => {
     const lngs = allPoints.map((point) => point.lng)
@@ -158,13 +156,21 @@ function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, 
   const mapCenter = project(center)
   const boundary = (isochrone?.geometry?.coordinates?.[0] || []).map(project).filter(Boolean)
   const boundaryLabel = boundary.length ? boundary.reduce((top, point) => point.y < top.y ? point : top, boundary[0]) : null
-  const surfaces = blindSurfaces(blindZones, blindCells, highDiscernibility)
-  const visibleHeatmap = highDiscernibility ? selectAccessibleHeatSamples(heatmap, targetDurationSeconds) : heatmap.filter((sample) => sample.status === 'ok').slice(0, 220)
+  const surfaces = blindSurfaces(blindZones, blindCells)
+  const visibleHeatmap = selectAccessibleHeatSamples(heatmap, targetDurationSeconds)
   const selectAtPointer = (event) => {
     if (!onSelectPoint) return
-    const rect = event.currentTarget.getBoundingClientRect()
-    const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
-    const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
+    const svg = event.currentTarget
+    const transform = svg.getScreenCTM()
+    if (!transform) return
+    const pointer = svg.createSVGPoint()
+    pointer.x = event.clientX
+    pointer.y = event.clientY
+    const point = pointer.matrixTransform(transform.inverse())
+    const viewBox = svg.viewBox.baseVal
+    const x = (point.x - viewBox.x) / viewBox.width
+    const y = (point.y - viewBox.y) / viewBox.height
+    if (x < 0 || x > 1 || y < 0 || y > 1) return
     onSelectPoint({
       lng: bounds.minimumLng + x * (bounds.maximumLng - bounds.minimumLng),
       lat: bounds.maximumLat - y * (bounds.maximumLat - bounds.minimumLat),
@@ -172,14 +178,13 @@ function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, 
   }
 
   return (
-    <div className={`baidu-map-shell offline-map-shell${highDiscernibility ? ' baidu-map-shell--accessible' : ''}`}>
+    <div className="baidu-map-shell offline-map-shell baidu-map-shell--accessible">
       <svg className="offline-map" viewBox="0 0 1000 600" role="img" aria-label="离线样例地图，可点击重新选择中心点" onClick={selectAtPointer}>
         <defs>
           <pattern id="map-grid" width="55" height="55" patternUnits="userSpaceOnUse"><path d="M55 0H0V55" fill="none" stroke="#dce7e3" strokeWidth="1" /></pattern>
           <pattern id="blind-single" width="15" height="15" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width="15" height="15" fill="#f4f4f1" fillOpacity=".76" /><line x1="0" y1="0" x2="0" y2="15" stroke="#4d5557" strokeWidth="3" /></pattern>
           <pattern id="blind-double" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="14" height="14" fill="#ecece8" fillOpacity=".82" /><path d="M-2 2 2-2M0 14 14 0M12 16 16 12M-2 12 2 16M0 0 14 14M12-2 16 2" stroke="#3f4749" strokeWidth="2.2" /></pattern>
           <pattern id="blind-triple" width="11" height="11" patternUnits="userSpaceOnUse"><rect width="11" height="11" fill="#deded9" fillOpacity=".9" /><path d="M0 0H11M0 5.5H11M0 11H11M0 0V11M5.5 0V11M11 0V11" stroke="#303739" strokeWidth="1.5" /></pattern>
-          <filter id="heat-blur"><feGaussianBlur stdDeviation="16" /></filter>
         </defs>
         <rect width="1000" height="600" fill="#edf3f0" />
         <rect width="1000" height="600" fill="url(#map-grid)" />
@@ -190,18 +195,17 @@ function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, 
           const point = project(sample)
           if (!point) return null
           const band = getDurationBand(sample.duration, targetDurationSeconds)
-          if (highDiscernibility) return <OfflineHeatSymbol key={`heat-${index}`} point={point} band={band} color={durationColor(sample.duration, targetDurationSeconds)} label={`步行耗时 ${Math.round(Number(sample.duration || 0) / 60)} 分钟，${band.label}`} />
-          return <circle key={`heat-${index}`} cx={point.x} cy={point.y} r="31" fill={durationColor(sample.duration, targetDurationSeconds)} opacity=".18" filter="url(#heat-blur)" />
+          return <OfflineHeatSymbol key={`heat-${index}`} point={point} band={band} color={durationColor(sample.duration, targetDurationSeconds)} label={`步行耗时 ${Math.round(Number(sample.duration || 0) / 60)} 分钟，${band.label}`} />
         })}
-        {layers.isochrone && boundary.length >= 3 && <polygon points={boundary.map((point) => `${point.x},${point.y}`).join(' ')} fill={highDiscernibility ? 'rgba(255,255,255,.03)' : 'rgba(22,127,118,.16)'} stroke={highDiscernibility ? '#183c39' : '#167f76'} strokeWidth={highDiscernibility ? 7 : 5} strokeDasharray="18 9" />}
-        {layers.isochrone && highDiscernibility && boundaryLabel && <g transform={`translate(${Math.min(850, Math.max(145, boundaryLabel.x))} ${Math.max(30, boundaryLabel.y - 14)})`} className="map-time-boundary-label"><rect x="-112" y="-18" width="224" height="34" rx="8" /><text x="0" y="5" textAnchor="middle">◷ {Math.round(targetDurationSeconds / 60)} 分钟步行边界</text></g>}
+        {layers.isochrone && boundary.length >= 3 && <polygon points={boundary.map((point) => `${point.x},${point.y}`).join(' ')} fill="rgba(255,255,255,.03)" stroke="#183c39" strokeWidth={7} strokeDasharray="18 9" />}
+        {layers.isochrone && boundaryLabel && <g transform={`translate(${Math.min(850, Math.max(145, boundaryLabel.x))} ${Math.max(30, boundaryLabel.y - 14)})`} className="map-time-boundary-label"><rect x="-112" y="-18" width="224" height="34" rx="8" /><text x="0" y="5" textAnchor="middle">◷ {Math.round(targetDurationSeconds / 60)} 分钟步行边界</text></g>}
         {layers.blindZones && surfaces.items.map((item, index) => {
           const points = (item.polygon || []).map(project).filter(Boolean)
           if (points.length < 3) return null
           const visual = getBlindZoneVisual(item.missingCategories)
-          return <polygon key={`blind-surface-${index}`} points={points.map((point) => `${point.x},${point.y}`).join(' ')} fill={highDiscernibility ? `url(#blind-${visual.pattern})` : 'rgba(88,96,98,.34)'} stroke={surfaces.exactCells ? '#777d7e' : '#343b3d'} strokeWidth={surfaces.exactCells ? .55 : 3} />
+          return <polygon key={`blind-surface-${index}`} points={points.map((point) => `${point.x},${point.y}`).join(' ')} fill={`url(#blind-${visual.pattern})`} stroke={surfaces.exactCells ? '#777d7e' : '#343b3d'} strokeWidth={surfaces.exactCells ? .55 : 3} />
         })}
-        {layers.blindZones && highDiscernibility && blindZones.map((zone, index) => {
+        {layers.blindZones && blindZones.map((zone, index) => {
           const point = project(zonePoint(zone))
           if (!point) return null
           const visual = getBlindZoneVisual(zone.missingCategories)
@@ -214,7 +218,7 @@ function OfflineMap({ center, pois, blindZones, blindCells, isochrone, heatmap, 
             <text className="map-zone-tag__detail" x="0" y="11" textAnchor="middle">缺：{visual.missingLabels.join('、')}</text>
           </g>
         })}
-        {layers.blindZones && highDiscernibility && selectedZoneId && blindZones.filter((zone) => zone.id === selectedZoneId).map((zone) => {
+        {layers.blindZones && selectedZoneId && blindZones.filter((zone) => zone.id === selectedZoneId).map((zone) => {
           const points = (zone.polygon || []).map(project).filter(Boolean)
           return points.length >= 3 && <polygon key={`selected-${zone.id}`} points={points.map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="#101719" strokeWidth="8" strokeDasharray="3 4" pointerEvents="none" />
         })}
@@ -278,7 +282,6 @@ export default function BaiduMap({
   heatmap = [],
   layers = MAP_LAYER_DEFAULTS,
   targetDurationSeconds = 900,
-  highDiscernibility = true,
   selectedZoneId = null,
   onSelectZone,
   onSelectPoint,
@@ -339,17 +342,13 @@ export default function BaiduMap({
       const viewport = [new BMapGL.Point(mapCenter.lng, mapCenter.lat)]
 
       if (layers.heatmap) {
-        const visibleHeatmap = highDiscernibility ? selectAccessibleHeatSamples(heatmap, targetDurationSeconds) : heatmap.filter((sample) => sample.status === 'ok').slice(0, 220)
+        const visibleHeatmap = selectAccessibleHeatSamples(heatmap, targetDurationSeconds)
         visibleHeatmap.forEach((sample) => {
           const location = validPoint(sample)
           if (!location) return
           const point = new BMapGL.Point(location.lng, location.lat)
           const band = getDurationBand(sample.duration, targetDurationSeconds)
-          if (highDiscernibility) {
-            addShapeMarker({ BMapGL, map, point, shape: band.shape, color: durationColor(sample.duration, targetDurationSeconds), symbol: '', size: 22, title: `步行耗时 ${Math.round(Number(sample.duration || 0) / 60)} 分钟，${band.label}` })
-          } else {
-            map.addOverlay(new BMapGL.Circle(point, 42, { strokeWeight: 0, fillColor: durationColor(sample.duration, targetDurationSeconds), fillOpacity: 0.12 }))
-          }
+          addShapeMarker({ BMapGL, map, point, shape: band.shape, color: durationColor(sample.duration, targetDurationSeconds), symbol: '', size: 22, title: `步行耗时 ${Math.round(Number(sample.duration || 0) / 60)} 分钟，${band.label}` })
         })
       }
 
@@ -357,9 +356,9 @@ export default function BaiduMap({
       const validBoundary = boundary.map(validPoint).filter(Boolean)
       const boundaryPoints = validBoundary.map((point) => new BMapGL.Point(point.lng, point.lat))
       if (layers.isochrone && boundaryPoints.length >= 3) {
-        map.addOverlay(new BMapGL.Polygon(boundaryPoints, { strokeColor: highDiscernibility ? '#183c39' : '#168b7f', strokeWeight: highDiscernibility ? 4 : 3, strokeOpacity: 1, strokeStyle: 'dashed', fillColor: highDiscernibility ? '#ffffff' : '#68c5b8', fillOpacity: highDiscernibility ? 0.03 : 0.18 }))
+        map.addOverlay(new BMapGL.Polygon(boundaryPoints, { strokeColor: '#183c39', strokeWeight: 4, strokeOpacity: 1, strokeStyle: 'dashed', fillColor: '#ffffff', fillOpacity: 0.03 }))
         viewport.push(...boundaryPoints)
-        if (highDiscernibility && typeof document !== 'undefined') {
+        if (typeof document !== 'undefined') {
           const north = validBoundary.reduce((top, point) => point.lat > top.lat ? point : top, validBoundary[0])
           const label = document.createElement('div')
           label.className = 'map-time-dom-label'
@@ -369,12 +368,12 @@ export default function BaiduMap({
       }
 
       if (layers.blindZones) {
-        const surfaces = blindSurfaces(blindZones, blindCells, highDiscernibility)
+        const surfaces = blindSurfaces(blindZones, blindCells)
         surfaces.items.forEach((item) => {
           const points = (item.polygon || []).map(validPoint).filter(Boolean).map((point) => new BMapGL.Point(point.lng, point.lat))
           if (points.length < 3) return
           const visual = getBlindZoneVisual(item.missingCategories)
-          const opacity = highDiscernibility ? [0.13, 0.22, 0.31][visual.severity - 1] : 0.34
+          const opacity = [0.13, 0.22, 0.31][visual.severity - 1]
           const polygon = new BMapGL.Polygon(points, {
             strokeColor: surfaces.exactCells ? '#6e7475' : '#343b3d',
             strokeWeight: surfaces.exactCells ? 1 : 3,
@@ -388,7 +387,7 @@ export default function BaiduMap({
           viewport.push(...points)
         })
 
-        if (highDiscernibility && typeof document !== 'undefined') blindZones.slice(0, 24).forEach((zone, index) => {
+        if (typeof document !== 'undefined') blindZones.slice(0, 24).forEach((zone, index) => {
           const location = zonePoint(zone)
           if (!location) return
           const [labelOffsetX, labelOffsetY] = zoneLabelOffset(index)
@@ -397,7 +396,7 @@ export default function BaiduMap({
         })
 
         const selectedZone = blindZones.find((zone) => zone.id === selectedZoneId)
-        if (highDiscernibility && selectedZone) {
+        if (selectedZone) {
           const points = (selectedZone.polygon || []).map(validPoint).filter(Boolean).map((point) => new BMapGL.Point(point.lng, point.lat))
           if (points.length >= 3) map.addOverlay(new BMapGL.Polygon(points, { strokeColor: '#101719', strokeWeight: 5, strokeOpacity: 1, strokeStyle: 'dashed', fillOpacity: 0 }))
         }
@@ -427,12 +426,7 @@ export default function BaiduMap({
       })
 
       const centerPoint = viewport[0]
-      if (highDiscernibility) addShapeMarker({ BMapGL, map, point: centerPoint, shape: 'circle', color: '#0e837b', symbol: '中', size: 44, title: '分析中心点' })
-      else {
-        const centerMarker = new BMapGL.Marker(centerPoint)
-        centerMarker.setTitle('分析中心点')
-        map.addOverlay(centerMarker)
-      }
+      addShapeMarker({ BMapGL, map, point: centerPoint, shape: 'circle', color: '#0e837b', symbol: '中', size: 44, title: '分析中心点' })
       if (viewport.length > 1) map.setViewport(viewport, { margins: [45, 45, 45, 45] })
       else map.centerAndZoom(centerPoint, 15)
     } catch (error) {
@@ -441,12 +435,12 @@ export default function BaiduMap({
       errorTimer = globalThis.setTimeout(() => setStatus({ state: 'error', message: mapErrorMessage(error, '百度地图覆盖物渲染失败') }), 0)
     }
     return () => globalThis.clearTimeout(errorTimer)
-  }, [center, pois, blindZones, blindCells, isochrone, heatmap, layers, targetDurationSeconds, highDiscernibility, selectedZoneId, status.state])
+  }, [center, pois, blindZones, blindCells, isochrone, heatmap, layers, targetDurationSeconds, selectedZoneId, status.state])
 
-  if (!browserAk || status.state === 'error') return <OfflineMap center={center} pois={pois} blindZones={blindZones} blindCells={blindCells} isochrone={isochrone} heatmap={heatmap} layers={layers} targetDurationSeconds={targetDurationSeconds} highDiscernibility={highDiscernibility} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} onSelectPoint={onSelectPoint} fallbackMessage={status.state === 'error' ? status.message : ''} />
+  if (!browserAk || status.state === 'error') return <OfflineMap center={center} pois={pois} blindZones={blindZones} blindCells={blindCells} isochrone={isochrone} heatmap={heatmap} layers={layers} targetDurationSeconds={targetDurationSeconds} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} onSelectPoint={onSelectPoint} fallbackMessage={status.state === 'error' ? status.message : ''} />
 
   return (
-    <div className={`baidu-map-shell${highDiscernibility ? ' baidu-map-shell--accessible' : ''}`}>
+    <div className="baidu-map-shell baidu-map-shell--accessible">
       <div ref={containerRef} className="baidu-map-canvas" aria-label="百度地图真实数据视图" />
       {status.state !== 'ready' && <div className={`map-sdk-state map-sdk-state--${status.state}`}>{status.message}</div>}
       {status.state === 'ready' && <div className="map-sdk-badge">Baidu JSAPI GL · BD-09</div>}
