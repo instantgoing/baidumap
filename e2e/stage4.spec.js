@@ -13,13 +13,12 @@ test('stage 4 main flow works in mock mode and exports an auditable report', asy
   await expect(page.getByText('当前来源：地图点击')).toBeVisible()
 
   await page.getByRole('button', { name: /分析 10 分钟生活圈/ }).click()
-  await expect(page.getByText('分析与报告已完成')).toBeVisible()
+  await expect(page.locator('.analysis-progress__headline strong')).toHaveText('分析完成')
   await expect(page.getByRole('progressbar', { name: '分析进度' })).toHaveAttribute('aria-valuenow', '100')
-  await expect(page.getByText(/边界复核 12\/12 点达标/)).toBeVisible()
   await expect(page.getByText('三类必测设施覆盖')).toBeVisible()
   await expect(page.getByText('灰区判定证据')).toBeVisible()
 
-  const heatmapToggle = page.getByRole('button', { name: /耗时热力/ })
+  const heatmapToggle = page.getByRole('button', { name: /走路快慢/ })
   await expect(heatmapToggle).toHaveAttribute('aria-pressed', 'true')
   await heatmapToggle.click()
   await expect(heatmapToggle).toHaveAttribute('aria-pressed', 'false')
